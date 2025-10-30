@@ -1,0 +1,320 @@
+@startuml 주문_및_결제_프로세스
+title 주문 및 결제 프로세스 시퀀스 다이어그램
+
+actor 고객 as Customer
+participant "API Gateway" as Gateway
+participant "주문 서비스" as OrderService
+participant "재고 서비스" as StockService
+participant "장바구니 서비스" as CartService
+participant "결제 서비스" as PaymentService
+participant "포인트 서비스" as PointService
+database "Database" as DB
+
+== 장바구니에 상품 담기 ==
+
+Customer -> Gateway: POST /carts/items\n{productId, quantity}
+activate Gateway
+
+Gateway -> Gateway: JWT 토큰 검증
+alt 토큰 검증 실패
+    Gateway --> Customer: 401 Unauthorized\n{code: "UNAUTHORIZED"}
+    deactivate Gateway
+end
+
+Gateway -> CartService: 장바구니 추가 요청
+activate CartService
+
+CartService -> CartService: 입력 데이터 검증\n(productId, quantity > 0)
+alt 입력 데이터 유효하지 않음
+    CartService --> Gateway: 400 Bad Request\n{code: "INVALID_INPUT"}
+    Gateway --> Customer: 400 Bad Request
+    deactivate CartService
+    deactivate Gateway
+end
+
+CartService -> StockService: 재고 확인 요청(productId)
+activate StockService
+
+StockService -> DB: SELECT * FROM product\nWHERE id = productId\nAND state = 'NORMAL'
+activate DB
+DB --> StockService: 상품 정보 반환
+deactivate DB
+
+alt 상품이 존재하지 않음
+    StockService --> CartService: 404 Not Found
+    CartService --> Gateway: 404 Not Found\n{code: "PRODUCT_NOT_FOUND"}
+    Gateway --> Customer: 404 Not Found
+    deactivate StockService
+    deactivate CartService
+    deactivate Gateway
+end
+
+StockService -> StockService: 재고 수량 확인\n(available_quantity >= quantity)
+alt 재고 부족
+    StockService --> CartService: 재고 부족
+    CartService --> Gateway: 400 Bad Request\n{code: "INSUFFICIENT_STOCK"}
+    Gateway --> Customer: 400 Bad Request
+    deactivate StockService
+    deactivate CartService
+    deactivate Gateway
+end
+
+alt 제한 수량 초과 (limited_quantity)
+    StockService --> CartService: 제한 수량 초과
+    CartService --> Gateway: 400 Bad Request\n{code: "EXCEEDED_LIMITED_QUANTITY"}
+    Gateway --> Customer: 400 Bad Request
+    deactivate StockService
+    deactivate CartService
+    deactivate Gateway
+end
+
+StockService --> CartService: 재고 확인 성공
+deactivate StockService
+
+CartService -> DB: INSERT INTO cart_item\n(user_id, product_id, quantity)
+activate DB
+DB --> CartService: 저장 완료
+deactivate DB
+
+CartService --> Gateway: 200 OK\n{cartItem 정보}
+Gateway --> Customer: 200 OK
+deactivate CartService
+deactivate Gateway
+
+== 주문 생성 ==
+
+Customer -> Gateway: POST /orders\n{shippingAddress, couponIds}
+activate Gateway
+
+Gateway -> Gateway: JWT 토큰 검증
+alt 토큰 검증 실패
+    Gateway --> Customer: 401 Unauthorized
+    deactivate Gateway
+end
+
+Gateway -> OrderService: 주문 생성 요청
+activate OrderService
+
+OrderService -> OrderService: 입력 데이터 검증\n(배송지 정보, 쿠폰)
+
+alt 입력 데이터 유효하지 않음
+    OrderService --> Gateway: 400 Bad Request\n{code: "INVALID_INPUT"}
+    Gateway --> Customer: 400 Bad Request
+    deactivate OrderService
+    deactivate Gateway
+end
+
+OrderService -> DB: BEGIN TRANSACTION
+activate DB
+
+OrderService -> CartService: 장바구니 조회 요청
+activate CartService
+CartService -> DB: SELECT * FROM cart_item\nWHERE user_id = userId\nAND state = 'NORMAL'
+DB --> CartService: 장바구니 아이템 목록
+CartService --> OrderService: 장바구니 아이템 반환
+deactivate CartService
+
+alt 장바구니가 비어있음
+    OrderService -> DB: ROLLBACK
+    OrderService --> Gateway: 400 Bad Request\n{code: "CART_EMPTY"}
+    Gateway --> Customer: 400 Bad Request
+    deactivate DB
+    deactivate OrderService
+    deactivate Gateway
+end
+
+OrderService -> StockService: 재고 확인 및 차감 요청\n(비관적 락)
+activate StockService
+
+StockService -> DB: SELECT * FROM stock\nWHERE product_id IN (productIds)\nFOR UPDATE
+DB --> StockService: 상품 정보 (락 획득)
+
+loop 각 상품별 재고 확인
+    StockService -> StockService: available_quantity >= quantity 검증
+
+    alt 재고 부족
+        StockService -> DB: ROLLBACK
+        StockService --> OrderService: 재고 부족
+        OrderService --> Gateway: 400 Bad Request\n{code: "INSUFFICIENT_STOCK"}
+        Gateway --> Customer: 400 Bad Request
+        deactivate DB
+        deactivate StockService
+        deactivate OrderService
+        deactivate Gateway
+    end
+end
+
+StockService -> DB: UPDATE stock\nSET available_quantity = available_quantity - quantity,\n    sold_quantity = sold_quantity + quantity\nWHERE product_id = productId
+DB --> StockService: 재고 차감 완료
+
+StockService --> OrderService: 재고 차감 성공
+deactivate StockService
+
+OrderService -> OrderService: 쿠폰 유효성 검증\n- 쿠폰 소유 확인\n- 사용 가능 상태 확인\n- 만료 기간 확인\n- 타입별 사용 개수 제한
+
+alt 쿠폰 검증 실패
+    OrderService -> DB: ROLLBACK
+    OrderService --> Gateway: 400 Bad Request\n{code: "INVALID_COUPON"}
+    Gateway --> Customer: 400 Bad Request
+    deactivate DB
+    deactivate OrderService
+    deactivate Gateway
+end
+
+OrderService -> OrderService: 총 주문 금액 계산\n- 상품 금액 합계\n- 쿠폰 할인 적용
+
+OrderService -> DB: INSERT INTO `order`\n(user_id, total_amount, ...)
+DB --> OrderService: 주문 생성 완료
+
+OrderService -> DB: INSERT INTO order_item\n(order_id, product_id, quantity, ...)
+DB --> OrderService: 주문 아이템 생성 완료
+
+OrderService -> DB: UPDATE user_coupon\nSET state = 'USED'\nWHERE id IN (couponIds)
+DB --> OrderService: 쿠폰 사용 처리 완료
+
+OrderService -> CartService: 장바구니 비우기 요청
+activate CartService
+CartService -> DB: UPDATE cart_item\nSET state = 'DELETED'\nWHERE user_id = userId
+DB --> CartService: 장바구니 비우기 완료
+CartService --> OrderService: 완료
+deactivate CartService
+
+OrderService -> DB: COMMIT
+deactivate DB
+
+OrderService --> Gateway: 201 Created\n{order 정보}
+Gateway --> Customer: 201 Created
+deactivate OrderService
+deactivate Gateway
+
+== 결제 처리 ==
+
+Customer -> Gateway: POST /payments\n{orderId, paymentMethod, amount}
+activate Gateway
+
+Gateway -> Gateway: JWT 토큰 검증
+
+Gateway -> PaymentService: 결제 요청
+activate PaymentService
+
+PaymentService -> PaymentService: 입력 데이터 검증\n(orderId, amount > 0)
+
+alt 입력 데이터 유효하지 않음
+    PaymentService --> Gateway: 400 Bad Request\n{code: "INVALID_INPUT"}
+    Gateway --> Customer: 400 Bad Request
+    deactivate PaymentService
+    deactivate Gateway
+end
+
+PaymentService -> DB: BEGIN TRANSACTION
+activate DB
+
+PaymentService -> DB: SELECT * FROM `order`\nWHERE id = orderId\nAND user_id = userId\nFOR UPDATE
+DB --> PaymentService: 주문 정보 (락 획득)
+
+alt 주문이 존재하지 않음
+    PaymentService -> DB: ROLLBACK
+    PaymentService --> Gateway: 404 Not Found\n{code: "ORDER_NOT_FOUND"}
+    Gateway --> Customer: 404 Not Found
+    deactivate DB
+    deactivate PaymentService
+    deactivate Gateway
+end
+
+alt 주문 상태가 NORMAL이 아님
+    PaymentService -> DB: ROLLBACK
+    PaymentService --> Gateway: 400 Bad Request\n{code: "INVALID_ORDER_STATE"}
+    Gateway --> Customer: 400 Bad Request
+    deactivate DB
+    deactivate PaymentService
+    deactivate Gateway
+end
+
+PaymentService -> PaymentService: 결제 금액 검증\n(amount == order.total_amount)
+
+alt 결제 금액 불일치
+    PaymentService -> DB: ROLLBACK
+    PaymentService --> Gateway: 400 Bad Request\n{code: "AMOUNT_MISMATCH"}
+    Gateway --> Customer: 400 Bad Request
+    deactivate DB
+    deactivate PaymentService
+    deactivate Gateway
+end
+
+PaymentService -> PointService: 포인트 잔액 확인
+activate PointService
+
+PointService -> DB: SELECT available_point\nFROM user\nWHERE id = userId\nFOR UPDATE
+DB --> PointService: 포인트 잔액
+
+alt 포인트 잔액 부족
+    PointService --> PaymentService: 잔액 부족
+    PaymentService -> DB: ROLLBACK
+    PaymentService --> Gateway: 400 Bad Request\n{code: "INSUFFICIENT_BALANCE"}
+    Gateway --> Customer: 400 Bad Request
+    deactivate DB
+    deactivate PointService
+    deactivate PaymentService
+    deactivate Gateway
+end
+
+PointService -> DB: UPDATE user\nSET available_point = available_point - amount,\n    used_point = used_point + amount\nWHERE id = userId
+DB --> PointService: 포인트 차감 완료
+
+PointService -> DB: INSERT INTO balance_transaction\n(user_id, type='PAYMENT', amount, ...)
+DB --> PointService: 트랜잭션 기록 완료
+
+PointService --> PaymentService: 포인트 결제 성공
+deactivate PointService
+
+PaymentService -> DB: INSERT INTO payment\n(order_id, amount, method, state='COMPLETED')
+DB --> PaymentService: 결제 정보 저장 완료
+
+PaymentService -> DB: UPDATE `order`\nSET state = 'CONFIRMED', paid_at = NOW()\nWHERE id = orderId
+DB --> PaymentService: 주문 상태 업데이트 완료
+
+PaymentService -> DB: COMMIT
+deactivate DB
+
+PaymentService --> Gateway: 200 OK\n{payment 정보}
+Gateway --> Customer: 200 OK\n결제 성공
+deactivate PaymentService
+deactivate Gateway
+
+== 결제 실패 시 보상 트랜잭션 ==
+
+note over PaymentService, DB: 결제 실패 시나리오
+activate Gateway
+activate PaymentService
+activate DB
+
+alt 결제 처리 중 예외 발생
+    PaymentService -> PaymentService: Exception 발생
+
+    PaymentService -> DB: ROLLBACK
+
+    PaymentService -> DB: UPDATE `order`\nSET state = 'PAYMENT_FAILED'\nWHERE id = orderId
+    DB --> PaymentService: 주문 상태 업데이트
+
+    PaymentService -> StockService: 재고 복구 요청
+    activate StockService
+    StockService -> DB: UPDATE stock\nSET available_quantity = available_quantity + quantity,\n    sold_quantity = sold_quantity - quantity\nWHERE product_id = productId
+    DB --> StockService: 재고 복구 완료
+    StockService --> PaymentService: 완료
+    deactivate StockService
+
+    PaymentService -> DB: UPDATE user_coupon\nSET state = 'AVAILABLE'\nWHERE id IN (couponIds)
+    DB --> PaymentService: 쿠폰 복구 완료
+
+    PaymentService -> DB: INSERT INTO payment\n(order_id, state='FAILED', ...)
+    DB --> PaymentService: 실패 기록 저장
+
+    PaymentService --> Gateway: 500 Internal Server Error\n{code: "PAYMENT_FAILED"}
+    Gateway --> Customer: 500 Internal Server Error\n결제 실패
+end
+
+deactivate DB
+deactivate PaymentService
+deactivate Gateway
+
+@enduml
