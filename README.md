@@ -119,102 +119,11 @@
 
 ### 엔티티 관계도
 
-> 상세한 ERD는 [dbdiagram.io](https://dbdiagram.io/d/hanghae10-e-commerce-62da44e30d66c746552aa73e)에서 확인할 수 있습니다.
+![E-Commerce ERD](docs/images/hanghae10-e-commerce.png)
 
-```
-┌──────────────────┐
-│      User        │
-├──────────────────┤
-│ PK id            │
-│    email         │
-│    state         │
-│    type          │
-│    name          │
-│    phone         │
-│    available_pt  │
-│    used_point    │
-│    created_at    │
-│    updated_at    │
-└────────┬─────────┘
-         │
-         ├─────────────────────────┬─────────────────────────┐
-         │                         │                         │
-    ┌────▼──────┐         ┌───────▼────────┐       ┌───────▼────────┐
-    │UserCoupon │         │     Cart       │       │    Order       │
-    ├───────────┤         ├────────────────┤       ├────────────────┤
-    │PK id      │         │ PK id          │       │ PK id          │
-    │   user_id │         │    user_id     │       │    user_id     │
-    │   coupon  │         │    user_coupon │       │    user_coupon │
-    │   state   │         │    state       │       │    cart_id     │
-    │   issued  │         │    created_at  │       │    state       │
-    │   used_at │         │    updated_at  │       │    amount      │
-    │   expires │         └────────┬───────┘       │    discount_a  │
-    │   created │                  │               │    total_amt   │
-    │   updated │            ┌─────▼──────────┐    │    order_num   │
-    └───────────┘            │   CartItem     │    │    shipping*   │
-                             ├────────────────┤    │    created_at  │
-                             │ PK id          │    │    updated_at  │
-                             │    cart_id     │    └────────┬───────┘
-                             │    product_id  │             │
-                             │    product_opt │       ┌─────▼──────────┐
-                             │    user_coupon │       │   OrderItem    │
-                             │    state       │       ├────────────────┤
-                             │    quantity    │       │ PK id          │
-                             │    created_at  │       │    order_id    │
-                             │    updated_at  │       │    product_id  │
-                             └────────────────┘       │    product_opt │
-                                                      │    user_coupon │
-┌──────────────────┐                                 │    state       │
-│     Product      │                                 │    price       │
-├──────────────────┤                                 │    quantity    │
-│ PK id            │                                 │    discount_a  │
-│    state         │                                 │    total_amt   │
-│    name          │                                 │    created_at  │
-│    description   │                                 │    updated_at  │
-│    price         │                                 └────────────────┘
-│    limited_qty   │                                          │
-│    created_at    │                                    ┌─────▼─────────┐
-│    updated_at    │                                    │   Payment     │
-└────────┬─────────┘                                    ├───────────────┤
-         │                                              │ PK id         │
-         ├───────────────────┐                          │    order_id   │
-    ┌────▼──────────┐   ┌────▼──────┐                  │    state      │
-    │ProductOption  │   │   Stock   │                  │    method     │
-    ├───────────────┤   ├───────────┤                  │    paid_amt   │
-    │ PK id         │   │ PK id     │                  │    expires_at │
-    │    product_id │   │    prod_id│                  │    created_at │
-    │    state      │   │    prod_op│                  │    updated_at │
-    │    price      │   │    avail  │                  └───────────────┘
-    │    created_at │   │    sold   │
-    │    updated_at │   │    memo   │         ┌──────────────────────┐
-    └───────────────┘   │    created│         │ BalanceTransaction   │
-                        │    updated│         ├──────────────────────┤
-┌──────────────────┐   └───────────┘         │ PK id                │
-│     Coupon       │                         │    user_id           │
-├──────────────────┤                         │    order_id          │
-│ PK id            │                         │    type              │
-│    name          │                         │    amount            │
-│    type          │                         │    balance_before    │
-│    state         │                         │    balance_after     │
-│    discount_rate │                         │    description       │
-│    discount_price│                         │    created_at        │
-│    total_qty     │                         │    updated_at        │
-│    issued_qty    │                         └──────────────────────┘
-│    begin_date    │
-│    end_date      │                         ┌──────────────────────┐
-│    created_at    │                         │   PopularProduct     │
-│    updated_at    │                         ├──────────────────────┤
-└──────────────────┘                         │ PK id                │
-                                             │    product_id        │
-                                             │    rank              │
-                                             │    sales_count       │
-                                             │    sales_amount      │
-                                             │    period_start      │
-                                             │    period_end        │
-                                             │    created_at        │
-                                             │    updated_at        │
-                                             └──────────────────────┘
-```
+**편집 가능한 ERD**: [dbdiagram.io에서 열기](https://dbdiagram.io/d/hanghae10-e-commerce-62da44e30d66c746552aa73e)
+
+**DBML 소스**: [database-schema.dbml](docs/api/database-schema.dbml)
 
 ---
 
