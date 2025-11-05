@@ -265,9 +265,7 @@ CREATE TABLE `stock` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일시',
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '수정일시',
 
-    UNIQUE KEY `uk_stock_product_option` (`product_option_id`),
-    INDEX `idx_stock_product` (`product_id`),
-    INDEX `idx_stock_product_option` (`product_id`, `product_option_id`)
+    UNIQUE KEY `uk_stock_product_option` (`product_id`, `product_option_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='재고';
 ```
 
@@ -768,11 +766,7 @@ CREATE INDEX idx_product_state ON product(state);
 CREATE INDEX idx_product_option_product ON product_option(product_id);
 CREATE INDEX idx_product_option_state ON product_option(state);
 
--- Stock
-CREATE INDEX idx_stock_product ON stock(product_id);
-
 -- Coupon
-CREATE INDEX idx_coupon_type ON coupon(type);
 CREATE INDEX idx_coupon_state ON coupon(state);
 
 -- UserCoupon
@@ -815,9 +809,6 @@ CREATE INDEX idx_popular_rank ON popular_product(rank);
 -- Product: 상태별 가격 정렬 조회
 CREATE INDEX idx_product_state_price ON product(state, price);
 
--- Stock: 상품 및 옵션별 재고 조회
-CREATE INDEX idx_stock_product_option ON stock(product_id, product_option_id);
-
 -- Coupon: 사용 기간별 쿠폰 조회
 CREATE INDEX idx_coupon_date ON coupon(begin_date, end_date);
 
@@ -846,8 +837,8 @@ CREATE INDEX idx_popular_period ON popular_product(period_start, period_end);
 -- User: 이메일 중복 방지
 CREATE UNIQUE INDEX uk_user_email ON `user`(email);
 
--- Stock: 옵션별 재고 중복 방지
-CREATE UNIQUE INDEX uk_stock_product_option ON stock(product_option_id);
+-- Stock: 상품과 옵션 조합 중복 방지
+CREATE UNIQUE INDEX uk_stock_product_option ON stock(product_id, product_option_id);
 
 -- Order: 주문 번호 중복 방지
 CREATE UNIQUE INDEX uk_order_number ON `order`(order_number);
@@ -980,3 +971,6 @@ INSERT INTO coupon (name, state, discount_rate, discount_price, total_quantity, 
 | 1.1 | 2025-10-31 | System | 참고 ERD 기반 수정 (ProductOption, Stock, FK 제거 등) |
 | 1.2 | 2025-10-31 | System | API 명세서 기반 누락 필드 및 테이블 추가<br>- Product: description 필드 추가<br>- Order: order_number, 배송 정보 필드 추가<br>- BalanceTransaction 테이블 추가<br>- PopularProduct 테이블 추가 |
 | 1.3 | 2025-10-31 | System | User 테이블 잔액/포인트 필드 설명 명확화<br>- available_point: "사용 가능 잔액 (원)"<br>- used_point: "사용한 포인트"<br>- 비즈니스 로직 상세 설명 추가 |
+| 1.4 | 2025-11-06 | System | 쿠폰 시스템 단순화<br>- Coupon: type 필드 제거 (장바구니 전체 할인만 지원)<br>- CartItem, OrderItem: user_coupon_id 필드 제거 |
+| 1.5 | 2025-11-06 | System | Stock 테이블 유니크 키 변경<br>- UNIQUE KEY (product_id, product_option_id)로 복합 키 적용<br>- 상품별로 여러 재고 레코드 관리 가능 |
+| 1.6 | 2025-11-06 | System | Stock 테이블 중복 인덱스 제거<br>- idx_stock_product 제거 (복합 유니크 키의 leftmost prefix 활용) |
