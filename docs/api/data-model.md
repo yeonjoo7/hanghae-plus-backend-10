@@ -302,7 +302,6 @@ CREATE TABLE `stock` (
 CREATE TABLE `coupon` (
     `id` BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT '쿠폰 ID',
     `name` VARCHAR(200) NOT NULL COMMENT '쿠폰명',
-    `type` VARCHAR(20) NOT NULL COMMENT '쿠폰 타입',
     `state` VARCHAR(20) NOT NULL DEFAULT 'NORMAL' COMMENT '상태',
     `discount_rate` INT UNSIGNED COMMENT '할인율 (%)',
     `discount_price` INT UNSIGNED COMMENT '할인 금액 (원)',
@@ -313,7 +312,6 @@ CREATE TABLE `coupon` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일시',
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '수정일시',
 
-    INDEX `idx_coupon_type` (`type`),
     INDEX `idx_coupon_state` (`state`),
     INDEX `idx_coupon_date` (`begin_date`, `end_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='쿠폰';
@@ -324,7 +322,6 @@ CREATE TABLE `coupon` (
 |--------|------|------|---------|-------------|
 | id | BIGINT UNSIGNED | NO | AUTO_INCREMENT | 쿠폰 ID (PK) |
 | name | VARCHAR(200) | NO | - | 쿠폰명 |
-| type | VARCHAR(20) | NO | - | 쿠폰 타입 |
 | state | VARCHAR(20) | NO | 'NORMAL' | 상태 |
 | discount_rate | INT UNSIGNED | YES | NULL | 할인율 (%) |
 | discount_price | INT UNSIGNED | YES | NULL | 할인 금액 (원) |
@@ -336,10 +333,10 @@ CREATE TABLE `coupon` (
 | updated_at | DATETIME | NO | CURRENT_TIMESTAMP | 수정일시 |
 
 #### Enum Values
-- **type**: CART, CART_ITEM
 - **state**: NORMAL, EXPIRED, DISCONTINUED, DELETED
 
 #### 비즈니스 로직
+- 쿠폰은 장바구니 전체에 적용됨
 - discount_rate와 discount_price 중 하나만 값을 가짐
 - issued_quantity <= total_quantity
 - 발급 시 issued_quantity 증가
@@ -424,7 +421,7 @@ CREATE TABLE `cart` (
 
 #### 참조 관계 (논리적)
 - `user_id` → `user.id`
-- `user_coupon_id` → `user_coupon.id` (CART 타입 쿠폰)
+- `user_coupon_id` → `user_coupon.id`
 
 ---
 
@@ -438,7 +435,6 @@ CREATE TABLE `cart_item` (
     `cart_id` BIGINT UNSIGNED NOT NULL COMMENT '장바구니 ID (논리적 참조)',
     `product_id` BIGINT UNSIGNED NOT NULL COMMENT '상품 ID (논리적 참조)',
     `product_option_id` BIGINT UNSIGNED COMMENT '상품 옵션 ID (논리적 참조)',
-    `user_coupon_id` BIGINT UNSIGNED COMMENT '적용된 사용자 쿠폰 ID (논리적 참조)',
     `state` VARCHAR(20) NOT NULL DEFAULT 'NORMAL' COMMENT '상태',
     `quantity` INT UNSIGNED NOT NULL COMMENT '수량',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일시',
@@ -457,7 +453,6 @@ CREATE TABLE `cart_item` (
 | cart_id | BIGINT UNSIGNED | NO | - | 장바구니 ID (논리적 FK) |
 | product_id | BIGINT UNSIGNED | NO | - | 상품 ID (논리적 FK) |
 | product_option_id | BIGINT UNSIGNED | YES | NULL | 상품 옵션 ID (논리적 FK) |
-| user_coupon_id | BIGINT UNSIGNED | YES | NULL | 적용된 사용자 쿠폰 ID (논리적 FK) |
 | state | VARCHAR(20) | NO | 'NORMAL' | 상태 |
 | quantity | INT UNSIGNED | NO | - | 수량 |
 | created_at | DATETIME | NO | CURRENT_TIMESTAMP | 생성일시 |
@@ -470,7 +465,6 @@ CREATE TABLE `cart_item` (
 - `cart_id` → `cart.id`
 - `product_id` → `product.id`
 - `product_option_id` → `product_option.id`
-- `user_coupon_id` → `user_coupon.id` (CART_ITEM 타입 쿠폰)
 
 ---
 
@@ -529,7 +523,7 @@ CREATE TABLE `order` (
 
 #### 참조 관계 (논리적)
 - `user_id` → `user.id`
-- `user_coupon_id` → `user_coupon.id` (CART 타입 쿠폰)
+- `user_coupon_id` → `user_coupon.id`
 - `cart_id` → `cart.id`
 
 #### 비즈니스 로직
@@ -547,7 +541,6 @@ CREATE TABLE `order_item` (
     `order_id` BIGINT UNSIGNED NOT NULL COMMENT '주문 ID (논리적 참조)',
     `product_id` BIGINT UNSIGNED NOT NULL COMMENT '상품 ID (논리적 참조)',
     `product_option_id` BIGINT UNSIGNED COMMENT '상품 옵션 ID (논리적 참조)',
-    `user_coupon_id` BIGINT UNSIGNED COMMENT '적용된 사용자 쿠폰 ID (논리적 참조)',
     `state` VARCHAR(20) NOT NULL DEFAULT 'NORMAL' COMMENT '상태',
     `price` INT UNSIGNED NOT NULL COMMENT '상품 단가',
     `quantity` INT UNSIGNED NOT NULL COMMENT '수량',
@@ -568,7 +561,6 @@ CREATE TABLE `order_item` (
 | order_id | BIGINT UNSIGNED | NO | - | 주문 ID (논리적 FK) |
 | product_id | BIGINT UNSIGNED | NO | - | 상품 ID (논리적 FK) |
 | product_option_id | BIGINT UNSIGNED | YES | NULL | 상품 옵션 ID (논리적 FK) |
-| user_coupon_id | BIGINT UNSIGNED | YES | NULL | 적용된 사용자 쿠폰 ID (논리적 FK) |
 | state | VARCHAR(20) | NO | 'NORMAL' | 상태 |
 | price | INT UNSIGNED | NO | - | 상품 단가 (원) |
 | quantity | INT UNSIGNED | NO | - | 수량 |
@@ -584,7 +576,6 @@ CREATE TABLE `order_item` (
 - `order_id` → `order.id`
 - `product_id` → `product.id`
 - `product_option_id` → `product_option.id`
-- `user_coupon_id` → `user_coupon.id` (CART_ITEM 타입 쿠폰)
 
 #### 비즈니스 로직
 - total_amount = (price * quantity) - discount_amount
@@ -744,10 +735,8 @@ CREATE TABLE `popular_product` (
 
 #### Coupon 관련
 - `Coupon` 1 : N `UserCoupon`
-- `UserCoupon` 1 : 1 `Cart` (CART 타입)
-- `UserCoupon` 1 : N `CartItem` (CART_ITEM 타입)
-- `UserCoupon` 1 : 1 `Order` (CART 타입)
-- `UserCoupon` 1 : N `OrderItem` (CART_ITEM 타입)
+- `UserCoupon` 1 : 1 `Cart`
+- `UserCoupon` 1 : 1 `Order`
 
 #### Cart 관련
 - `Cart` 1 : N `CartItem`
@@ -896,17 +885,12 @@ CREATE UNIQUE INDEX uk_order_number ON `order`(order_number);
 
 ## 쿠폰 적용 로직
 
-### CART 타입 쿠폰
+### 장바구니 쿠폰
 - 장바구니 전체에 할인 적용
 - `cart.user_coupon_id`에 저장
 - `order.user_coupon_id`에도 동일하게 저장
-- 최대 2개까지 사용 가능 (비즈니스 로직)
-
-### CART_ITEM 타입 쿠폰
-- 특정 상품에만 할인 적용
-- `cart_item.user_coupon_id`에 저장
-- `order_item.user_coupon_id`에도 동일하게 저장
-- 상품별로 1개씩 사용 가능 (비즈니스 로직)
+- 최대 1개까지 사용 가능 (비즈니스 로직)
+- 할인은 order 레벨에서 계산되어 `order.discount_amount`에 반영됨
 
 ---
 
@@ -981,9 +965,9 @@ INSERT INTO stock (product_id, product_option_id, available_quantity, sold_quant
 (3, NULL, 200, 0);
 
 -- 샘플 쿠폰 생성
-INSERT INTO coupon (name, type, state, discount_rate, discount_price, total_quantity, issued_quantity, begin_date, end_date) VALUES
-('신규 가입 10% 할인', 'CART', 'NORMAL', 10, NULL, 1000, 0, '2025-10-01 00:00:00', '2025-12-31 23:59:59'),
-('노트북 50,000원 할인', 'CART_ITEM', 'NORMAL', NULL, 50000, 500, 0, '2025-10-01 00:00:00', '2025-11-30 23:59:59');
+INSERT INTO coupon (name, state, discount_rate, discount_price, total_quantity, issued_quantity, begin_date, end_date) VALUES
+('신규 가입 10% 할인', 'NORMAL', 10, NULL, 1000, 0, '2025-10-01 00:00:00', '2025-12-31 23:59:59'),
+('장바구니 50,000원 할인', 'NORMAL', NULL, 50000, 500, 0, '2025-10-01 00:00:00', '2025-11-30 23:59:59');
 ```
 
 ---
