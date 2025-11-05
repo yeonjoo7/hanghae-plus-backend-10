@@ -477,7 +477,7 @@ CREATE TABLE `order` (
     `user_coupon_id` BIGINT UNSIGNED COMMENT '적용된 사용자 쿠폰 ID (논리적 참조)',
     `cart_id` BIGINT UNSIGNED COMMENT '장바구니 ID (논리적 참조)',
     `order_number` VARCHAR(50) NOT NULL COMMENT '주문 번호',
-    `state` VARCHAR(20) NOT NULL DEFAULT 'NORMAL' COMMENT '상태',
+    `state` VARCHAR(20) NOT NULL DEFAULT 'PENDING_PAYMENT' COMMENT '상태',
     `amount` INT UNSIGNED NOT NULL COMMENT '총 상품 금액',
     `discount_amount` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '총 할인 금액',
     `total_amount` INT UNSIGNED NOT NULL COMMENT '최종 결제 금액',
@@ -504,7 +504,7 @@ CREATE TABLE `order` (
 | user_coupon_id | BIGINT UNSIGNED | YES | NULL | 적용된 사용자 쿠폰 ID (논리적 FK) |
 | cart_id | BIGINT UNSIGNED | YES | NULL | 장바구니 ID (논리적 FK) |
 | order_number | VARCHAR(50) | NO | - | 주문 번호 (고유) |
-| state | VARCHAR(20) | NO | 'NORMAL' | 상태 |
+| state | VARCHAR(20) | NO | 'PENDING_PAYMENT' | 상태 |
 | amount | INT UNSIGNED | NO | - | 총 상품 금액 (원) |
 | discount_amount | INT UNSIGNED | NO | 0 | 총 할인 금액 (원) |
 | total_amount | INT UNSIGNED | NO | - | 최종 결제 금액 (원) |
@@ -517,7 +517,12 @@ CREATE TABLE `order` (
 | updated_at | DATETIME | NO | CURRENT_TIMESTAMP | 수정일시 |
 
 #### Enum Values
-- **state**: NORMAL, CANCELLED, REFUNDED, DELETED
+- **state**: PENDING_PAYMENT, COMPLETED, CANCELLED, REFUNDED, DELETED
+  - `PENDING_PAYMENT`: 결제 대기
+  - `COMPLETED`: 주문 완료 (결제 완료)
+  - `CANCELLED`: 주문 취소
+  - `REFUNDED`: 환불 완료
+  - `DELETED`: Soft delete (데이터 관리용)
 
 #### 참조 관계 (논리적)
 - `user_id` → `user.id`
@@ -974,3 +979,4 @@ INSERT INTO coupon (name, state, discount_rate, discount_price, total_quantity, 
 | 1.4 | 2025-11-06 | System | 쿠폰 시스템 단순화<br>- Coupon: type 필드 제거 (장바구니 전체 할인만 지원)<br>- CartItem, OrderItem: user_coupon_id 필드 제거 |
 | 1.5 | 2025-11-06 | System | Stock 테이블 유니크 키 변경<br>- UNIQUE KEY (product_id, product_option_id)로 복합 키 적용<br>- 상품별로 여러 재고 레코드 관리 가능 |
 | 1.6 | 2025-11-06 | System | Stock 테이블 중복 인덱스 제거<br>- idx_stock_product 제거 (복합 유니크 키의 leftmost prefix 활용) |
+| 1.7 | 2025-11-06 | System | Order 테이블 상태 값 API 명세와 통일<br>- NORMAL → PENDING_PAYMENT, COMPLETED로 명확화<br>- API 명세 부록 A의 주문 상태와 일치하도록 수정 |
