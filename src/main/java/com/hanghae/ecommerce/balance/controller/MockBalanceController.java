@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 @RestController
 @RequestMapping("/v1/balance")
-public class BalanceController {
+public class MockBalanceController {
 
     private final AtomicInteger userBalance = new AtomicInteger(500000);
     private final List<Map<String, Object>> transactions = new ArrayList<>();

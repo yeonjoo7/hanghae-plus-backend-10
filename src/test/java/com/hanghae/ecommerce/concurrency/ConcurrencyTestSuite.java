@@ -46,7 +46,7 @@ import static org.assertj.core.api.Assertions.*;
  * 
  * 실제 서비스에서 발생할 수 있는 복합적인 동시성 시나리오를 테스트합니다.
  */
-@SpringBootTest
+@SpringBootTest(classes = com.hanghae.ecommerce.EcommerceApiApplication.class)
 class ConcurrencyTestSuite {
 
     @Autowired private CouponService couponService;

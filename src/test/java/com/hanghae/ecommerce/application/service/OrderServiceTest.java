@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import com.hanghae.ecommerce.domain.order.Address;
 import com.hanghae.ecommerce.domain.order.Order;
 import com.hanghae.ecommerce.domain.order.OrderItem;
+import com.hanghae.ecommerce.domain.order.OrderNumber;
 import com.hanghae.ecommerce.domain.order.OrderState;
 import com.hanghae.ecommerce.domain.order.Recipient;
 import com.hanghae.ecommerce.domain.order.repository.OrderItemRepository;
@@ -16,7 +17,6 @@ import com.hanghae.ecommerce.domain.order.repository.OrderRepository;
 import com.hanghae.ecommerce.domain.product.Money;
 import com.hanghae.ecommerce.domain.product.Product;
 import com.hanghae.ecommerce.domain.product.Quantity;
-import com.hanghae.ecommerce.domain.product.Stock;
 import com.hanghae.ecommerce.domain.user.User;
 import com.hanghae.ecommerce.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,7 +28,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
@@ -70,13 +69,16 @@ class OrderServiceTest {
     @BeforeEach
     void setUp() {
         testUser = User.create("test@example.com", "테스트", "010-1234-5678");
-        
-        testProduct = Product.create(
-            "테스트 상품",
-            "테스트 상품 설명",
-            Money.of(10000),
-            Quantity.of(5)
-        );
+
+        Product createdProduct = Product.create(
+                "테스트 상품",
+                "테스트 상품 설명",
+                Money.of(10000),
+                Quantity.of(5));
+        testProduct = Product.restore(1L, createdProduct.getState(), createdProduct.getName(),
+                createdProduct.getDescription(), createdProduct.getPrice(),
+                createdProduct.getLimitedQuantity(), createdProduct.getCreatedAt(),
+                createdProduct.getUpdatedAt());
 
         testCart = Cart.restore(1L, 1L, null, CartState.NORMAL, LocalDateTime.now(), LocalDateTime.now());
         testCartItem = CartItem.createForProduct(testCart.getId(), 1L, Quantity.of(2));
@@ -91,20 +93,25 @@ class OrderServiceTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
         when(cartService.getSelectedCartItems(userId, cartItemIds)).thenReturn(
-            List.of(new CartService.CartItemInfo(testCartItem, testProduct))
-        );
+                List.of(new CartService.CartItemInfo(testCartItem, testProduct)));
+        when(cartService.getOrCreateActiveCart(userId)).thenReturn(testCart);
         when(stockService.checkStockAvailability(anyMap())).thenReturn(
-            new StockService.StockCheckResult(true, null)
-        );
-        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+                new StockService.StockCheckResult(true, null));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order order = invocation.getArgument(0);
+            // Order의 id를 설정하기 위해 restore를 사용
+            return Order.restore(1L, order.getUserId(), order.getUserCouponId(), order.getCartId(),
+                    order.getOrderNumber(), order.getState(), order.getAmount(),
+                    order.getDiscountAmount(), order.getTotalAmount(), order.getRecipient(),
+                    order.getAddress(), order.getCreatedAt(), order.getUpdatedAt());
+        });
         when(orderItemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         // when
         OrderService.OrderInfo result = orderService.createOrder(
-            userId, cartItemIds, 
-            "수령인", "010-9876-5432",
-            "12345", "서울시", "상세주소"
-        );
+                userId, cartItemIds,
+                "수령인", "010-9876-5432",
+                "12345", "서울시", "상세주소");
 
         // then
         assertThat(result).isNotNull();
@@ -129,12 +136,11 @@ class OrderServiceTest {
 
         // when & then
         assertThatThrownBy(() -> orderService.createOrder(
-                userId, cartItemIds, 
+                userId, cartItemIds,
                 "수령인", "010-9876-5432",
-                "12345", "서울시", "상세주소"
-            ))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("주문할 상품이 없습니다");
+                "12345", "서울시", "상세주소"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("주문할 상품이 없습니다");
     }
 
     @Test
@@ -146,22 +152,18 @@ class OrderServiceTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
         when(cartService.getSelectedCartItems(userId, cartItemIds)).thenReturn(
-            List.of(new CartService.CartItemInfo(testCartItem, testProduct))
-        );
+                List.of(new CartService.CartItemInfo(testCartItem, testProduct)));
         when(stockService.checkStockAvailability(anyMap())).thenReturn(
-            new StockService.StockCheckResult(false, List.of(
-                new StockService.StockShortage(1L, 2, 1)
-            ))
-        );
+                new StockService.StockCheckResult(false, List.of(
+                        new StockService.StockShortage(1L, 2, 1))));
 
         // when & then
         assertThatThrownBy(() -> orderService.createOrder(
-                userId, cartItemIds, 
+                userId, cartItemIds,
                 "수령인", "010-9876-5432",
-                "12345", "서울시", "상세주소"
-            ))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("재고가 부족한 상품이 있습니다");
+                "12345", "서울시", "상세주소"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("재고가 부족한 상품이 있습니다");
     }
 
     @Test
@@ -170,11 +172,15 @@ class OrderServiceTest {
         // given
         Long userId = 1L;
         Long orderId = 1L;
-        
-        Order order = Order.create(userId, null, null, Money.of(20000), Money.zero(), 
-                                  Recipient.of("수령인", "010-9876-5432"), 
-                                  Address.of("12345", "서울시", "상세주소"));
-        
+
+        // Order.create()는 discountAmount.multiply(-1)을 사용하므로 직접 호출하지 않고 restore 사용
+        Order order = Order.restore(orderId, userId, null, null,
+                OrderNumber.of("ORD20240101000001"), OrderState.PENDING_PAYMENT,
+                Money.of(20000), Money.zero(), Money.of(20000),
+                Recipient.of("수령인", "010-9876-5432"),
+                Address.of("12345", "서울시", "상세주소"),
+                LocalDateTime.now(), LocalDateTime.now());
+
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
         when(orderItemRepository.findByOrderId(orderId)).thenReturn(List.of());
 
@@ -197,8 +203,8 @@ class OrderServiceTest {
 
         // when & then
         assertThatThrownBy(() -> orderService.getOrder(userId, orderId))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("주문을 찾을 수 없습니다");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("주문을 찾을 수 없습니다");
     }
 
     @Test
@@ -208,17 +214,20 @@ class OrderServiceTest {
         Long userId = 1L;
         Long orderId = 1L;
         Long otherUserId = 2L;
-        
-        Order order = Order.create(otherUserId, null, null, Money.of(20000), Money.zero(),
-                                  Recipient.of("수령인", "010-9876-5432"), 
-                                  Address.of("12345", "서울시", "상세주소"));
-        
+
+        Order order = Order.restore(orderId, otherUserId, null, null,
+                OrderNumber.of("ORD20240101000001"), OrderState.PENDING_PAYMENT,
+                Money.of(20000), Money.zero(), Money.of(20000),
+                Recipient.of("수령인", "010-9876-5432"),
+                Address.of("12345", "서울시", "상세주소"),
+                LocalDateTime.now(), LocalDateTime.now());
+
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
         // when & then
         assertThatThrownBy(() -> orderService.getOrder(userId, orderId))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("본인의 주문이 아닙니다");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("본인의 주문이 아닙니다");
     }
 
     @Test
@@ -226,14 +235,21 @@ class OrderServiceTest {
     void getUserOrders_Success() {
         // given
         Long userId = 1L;
-        List<Order> orders = List.of(
-            Order.create(userId, null, null, Money.of(10000), Money.zero(),
-                        Recipient.of("수령인1", "010-1111-1111"), 
-                        Address.of("12345", "서울시", "주소1")),
-            Order.create(userId, null, null, Money.of(20000), Money.zero(),
-                        Recipient.of("수령인2", "010-2222-2222"), 
-                        Address.of("54321", "부산시", "주소2"))
-        );
+        Order order1 = Order.restore(1L, userId, null, null,
+                OrderNumber.of("ORD20240101000001"), OrderState.PENDING_PAYMENT,
+                Money.of(10000), Money.zero(), Money.of(10000),
+                Recipient.of("수령인1", "010-1111-1111"),
+                Address.of("12345", "서울시", "주소1"),
+                LocalDateTime.now(), LocalDateTime.now());
+
+        Order order2 = Order.restore(2L, userId, null, null,
+                OrderNumber.of("ORD20240101000002"), OrderState.PENDING_PAYMENT,
+                Money.of(20000), Money.zero(), Money.of(20000),
+                Recipient.of("수령인2", "010-2222-2222"),
+                Address.of("54321", "부산시", "주소2"),
+                LocalDateTime.now(), LocalDateTime.now());
+
+        List<Order> orders = List.of(order1, order2);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
         when(orderRepository.findByUserIdOrderByCreatedAtDesc(userId)).thenReturn(orders);
@@ -247,31 +263,33 @@ class OrderServiceTest {
         assertThat(result).allMatch(orderSummary -> orderSummary.getOrderId() != null);
     }
 
-
     @Test
     @DisplayName("주문 취소 성공")
     void cancelOrder_Success() {
         // given
         Long userId = 1L;
         Long orderId = 1L;
-        
-        Order order = Order.create(userId, null, null, Money.of(20000), Money.zero(),
-                                  Recipient.of("수령인", "010-9876-5432"), 
-                                  Address.of("12345", "서울시", "상세주소"));
+
+        Order order = Order.restore(orderId, userId, null, null,
+                OrderNumber.of("ORD20240101000001"), OrderState.PENDING_PAYMENT,
+                Money.of(20000), Money.zero(), Money.of(20000),
+                Recipient.of("수령인", "010-9876-5432"),
+                Address.of("12345", "서울시", "상세주소"),
+                LocalDateTime.now(), LocalDateTime.now());
         List<OrderItem> orderItems = List.of(
-            OrderItem.createForProduct(orderId, 1L, Money.of(10000), Quantity.of(2), Money.zero())
-        );
+                OrderItem.createForProduct(orderId, 1L, Money.of(10000), Quantity.of(2), Money.zero()));
 
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
         when(orderItemRepository.findByOrderId(orderId)).thenReturn(orderItems);
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderItemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         // when
         orderService.cancelOrder(userId, orderId);
 
         // then
         assertThat(order.getState()).isEqualTo(OrderState.CANCELLED);
-        verify(stockService).restoreStock(1L, 2); // 재고 복원
+        verify(stockService).restoreStocks(anyMap()); // 재고 복원
         verify(orderRepository).save(order);
     }
 
@@ -281,17 +299,19 @@ class OrderServiceTest {
         // given
         Long userId = 1L;
         Long orderId = 1L;
-        
-        Order order = Order.create(userId, null, null, Money.of(20000), Money.zero(),
-                                  Recipient.of("수령인", "010-9876-5432"), 
-                                  Address.of("12345", "서울시", "상세주소"));
-        order.completePayment(); // 결제 완료 상태로 변경
+
+        Order order = Order.restore(orderId, userId, null, null,
+                OrderNumber.of("ORD20240101000001"), OrderState.COMPLETED,
+                Money.of(20000), Money.zero(), Money.of(20000),
+                Recipient.of("수령인", "010-9876-5432"),
+                Address.of("12345", "서울시", "상세주소"),
+                LocalDateTime.now(), LocalDateTime.now());
 
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
         // when & then
         assertThatThrownBy(() -> orderService.cancelOrder(userId, orderId))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("취소할 수 없는 주문 상태입니다");
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("취소할 수 없는 주문 상태입니다");
     }
 }

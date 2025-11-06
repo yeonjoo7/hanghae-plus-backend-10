@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.*;
  * 
  * 재고 동시 차감에서 Race Condition이 발생하지 않는지 검증합니다.
  */
-@SpringBootTest
+@SpringBootTest(classes = com.hanghae.ecommerce.EcommerceApiApplication.class)
 class StockConcurrencyTest {
 
     @Autowired
