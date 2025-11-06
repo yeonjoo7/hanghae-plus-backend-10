@@ -7,17 +7,22 @@ import com.hanghae.ecommerce.domain.coupon.repository.CouponRepository;
 import com.hanghae.ecommerce.domain.coupon.repository.UserCouponRepository;
 import com.hanghae.ecommerce.domain.user.User;
 import com.hanghae.ecommerce.domain.user.repository.UserRepository;
+import com.hanghae.ecommerce.infrastructure.lock.LockManager;
+import com.hanghae.ecommerce.infrastructure.lock.InMemoryLockManager;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
  * 쿠폰 관리 서비스
  * 쿠폰 발급, 사용, 조회 등의 비즈니스 로직을 처리하며 선착순 로직과 동시성 제어를 포함합니다.
+ * 
+ * 동시성 제어:
+ * - LockManager를 사용하여 쿠폰별로 독립적인 락 관리
+ * - 선착순 발급에서 Race Condition 방지
+ * - 타임아웃 지원으로 무한 대기 방지
  */
 @Service
 public class CouponService {
@@ -25,16 +30,16 @@ public class CouponService {
     private final CouponRepository couponRepository;
     private final UserCouponRepository userCouponRepository;
     private final UserRepository userRepository;
-    
-    // 쿠폰별 동시성 제어를 위한 락 객체 맵
-    private final Map<Long, Object> couponLocks = new ConcurrentHashMap<>();
+    private final LockManager lockManager;
 
     public CouponService(CouponRepository couponRepository, 
                         UserCouponRepository userCouponRepository,
-                        UserRepository userRepository) {
+                        UserRepository userRepository,
+                        LockManager lockManager) {
         this.couponRepository = couponRepository;
         this.userCouponRepository = userCouponRepository;
         this.userRepository = userRepository;
+        this.lockManager = lockManager;
     }
 
     /**
@@ -50,16 +55,28 @@ public class CouponService {
     }
 
     /**
-     * 선착순 쿠폰 발급 (동시성 제어)
+     * 선착순 쿠폰 발급 (동시성 제어 강화)
+     * 
+     * LockManager를 사용하여 쿠폰별로 락을 획득하고,
+     * 원자적으로 수량을 차감하여 Race Condition을 방지합니다.
      * 
      * @param userId 사용자 ID
      * @param couponId 쿠폰 ID
      * @return 발급된 사용자 쿠폰
      * @throws IllegalArgumentException 쿠폰/사용자를 찾을 수 없는 경우
      * @throws IllegalStateException 쿠폰을 발급할 수 없는 경우
+     * @throws RuntimeException 락 획득 실패 또는 동시성 오류
      */
     public UserCoupon issueCoupon(Long userId, Long couponId) {
-        // 사용자 존재 및 활성 상태 확인
+        // 입력값 검증
+        if (userId == null) {
+            throw new IllegalArgumentException("사용자 ID는 null일 수 없습니다.");
+        }
+        if (couponId == null) {
+            throw new IllegalArgumentException("쿠폰 ID는 null일 수 없습니다.");
+        }
+
+        // 사용자 존재 및 활성 상태 확인 (락 외부에서 먼저 검증)
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다. ID: " + userId));
         
@@ -67,18 +84,23 @@ public class CouponService {
             throw new IllegalStateException("비활성 사용자는 쿠폰을 발급받을 수 없습니다.");
         }
 
-        // 쿠폰별 락 획득 (선착순 처리를 위한 동시성 제어)
-        Object lock = couponLocks.computeIfAbsent(couponId, k -> new Object());
-        
-        synchronized (lock) {
-            // 쿠폰 존재 확인
-            Coupon coupon = couponRepository.findByIdForUpdate(couponId)
-                    .orElseThrow(() -> new IllegalArgumentException("쿠폰을 찾을 수 없습니다. ID: " + couponId));
+        // 중복 발급 확인 (락 외부에서 먼저 검증 - 성능 최적화)
+        if (userCouponRepository.existsByUserIdAndCouponId(userId, couponId)) {
+            throw new IllegalStateException("이미 발급받은 쿠폰입니다.");
+        }
 
-            // 중복 발급 확인
+        // 쿠폰별 락을 사용한 원자적 발급 처리
+        String lockKey = InMemoryLockManager.createCouponLockKey(couponId);
+        
+        return lockManager.executeWithLock(lockKey, () -> {
+            // 락 획득 후 다시 한 번 중복 발급 확인 (Double-check)
             if (userCouponRepository.existsByUserIdAndCouponId(userId, couponId)) {
                 throw new IllegalStateException("이미 발급받은 쿠폰입니다.");
             }
+
+            // 쿠폰 존재 확인 및 조회
+            Coupon coupon = couponRepository.findByIdForUpdate(couponId)
+                    .orElseThrow(() -> new IllegalArgumentException("쿠폰을 찾을 수 없습니다. ID: " + couponId));
 
             // 쿠폰 발급 가능 여부 확인
             if (!coupon.canIssue()) {
@@ -91,14 +113,23 @@ public class CouponService {
                 }
             }
 
-            // 쿠폰 발급 수량 증가
-            coupon.issue();
-            couponRepository.save(coupon);
+            // 원자적 쿠폰 발급 처리
+            try {
+                // 1. 쿠폰 발급 수량 증가
+                coupon.issue();
+                couponRepository.save(coupon);
 
-            // 사용자 쿠폰 생성
-            UserCoupon userCoupon = UserCoupon.issue(userId, couponId, coupon.getEndDate());
-            return userCouponRepository.save(userCoupon);
-        }
+                // 2. 사용자 쿠폰 생성 및 저장
+                UserCoupon userCoupon = UserCoupon.issue(userId, couponId, coupon.getEndDate());
+                UserCoupon savedUserCoupon = userCouponRepository.save(userCoupon);
+
+                return savedUserCoupon;
+            } catch (Exception e) {
+                // 발급 중 오류 발생 시 롤백 로직이 필요하다면 여기서 처리
+                // 현재는 인메모리이므로 별도 트랜잭션 롤백 불가
+                throw new RuntimeException("쿠폰 발급 중 오류가 발생했습니다: " + e.getMessage(), e);
+            }
+        });
     }
 
     /**
