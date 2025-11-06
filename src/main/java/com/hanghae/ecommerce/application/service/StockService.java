@@ -5,30 +5,39 @@ import com.hanghae.ecommerce.domain.product.Quantity;
 import com.hanghae.ecommerce.domain.product.Stock;
 import com.hanghae.ecommerce.domain.product.repository.ProductRepository;
 import com.hanghae.ecommerce.domain.product.repository.StockRepository;
+import com.hanghae.ecommerce.infrastructure.lock.LockManager;
+import com.hanghae.ecommerce.infrastructure.lock.InMemoryLockManager;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 재고 관리 서비스
- * 재고 조회, 차감, 복구 등의 비즈니스 로직을 처리하며 동시성 제어를 포함합니다.
+ * 재고 관리 서비스 (동시성 제어 강화)
+ * 
+ * 재고 조회, 차감, 복구 등의 비즈니스 로직을 처리하며 
+ * LockManager를 사용하여 강화된 동시성 제어를 제공합니다.
+ * 
+ * 주요 개선사항:
+ * - ReentrantLock 기반 락 관리로 성능 향상
+ * - 타임아웃 지원으로 데드락 방지
+ * - 상품별 독립적 락으로 동시성 극대화
  */
 @Service
 public class StockService {
 
     private final StockRepository stockRepository;
     private final ProductRepository productRepository;
-    
-    // 상품별 동시성 제어를 위한 락 객체 맵
-    private final Map<Long, Object> stockLocks = new ConcurrentHashMap<>();
+    private final LockManager lockManager;
 
-    public StockService(StockRepository stockRepository, ProductRepository productRepository) {
+    public StockService(StockRepository stockRepository, 
+                       ProductRepository productRepository,
+                       LockManager lockManager) {
         this.stockRepository = stockRepository;
         this.productRepository = productRepository;
+        this.lockManager = lockManager;
     }
 
     /**
@@ -120,21 +129,24 @@ public class StockService {
     }
 
     /**
-     * 재고 차감 (주문 시 사용 - 동시성 제어)
+     * 재고 차감 (주문 시 사용 - LockManager 기반 동시성 제어)
      * 
      * @param productId 상품 ID
      * @param quantity 차감할 수량
      * @throws IllegalArgumentException 상품 또는 재고를 찾을 수 없거나, 재고가 부족한 경우
+     * @throws RuntimeException 락 획득 실패 또는 동시성 오류
      */
     public void reduceStock(Long productId, int quantity) {
+        if (productId == null) {
+            throw new IllegalArgumentException("상품 ID는 null일 수 없습니다.");
+        }
         if (quantity <= 0) {
             throw new IllegalArgumentException("차감할 수량은 0보다 커야 합니다.");
         }
 
-        // 상품별 락 획득
-        Object lock = stockLocks.computeIfAbsent(productId, k -> new Object());
+        String lockKey = InMemoryLockManager.createStockLockKey(productId);
         
-        synchronized (lock) {
+        lockManager.executeWithLock(lockKey, () -> {
             // 상품 판매 가능 여부 확인
             Product product = productRepository.findById(productId)
                     .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId));
@@ -149,10 +161,19 @@ public class StockService {
                     product.getLimitedQuantity().getValue() + ", 요청: " + quantity);
             }
 
-            // 재고 차감
+            // 재고 조회 및 차감
             Stock stock = stockRepository.findByProductIdAndProductOptionIdIsNullForUpdate(productId)
                     .orElseThrow(() -> new IllegalArgumentException("재고를 찾을 수 없습니다. ProductID: " + productId));
             
+            // 재고 부족 확인
+            if (!stock.hasEnoughStock(Quantity.of(quantity))) {
+                throw new IllegalArgumentException(String.format(
+                    "재고가 부족합니다. 요청: %d, 현재 재고: %d", 
+                    quantity, stock.getAvailableQuantity().getValue()
+                ));
+            }
+
+            // 원자적 재고 차감
             stock.reduceStock(Quantity.of(quantity));
             stockRepository.save(stock);
 
@@ -161,7 +182,9 @@ public class StockService {
                 product.markOutOfStock();
                 productRepository.save(product);
             }
-        }
+            
+            return null; // Void 작업이므로 null 반환
+        });
     }
 
     /**
@@ -194,21 +217,24 @@ public class StockService {
     }
 
     /**
-     * 재고 복구 (주문 취소 시 사용 - 동시성 제어)
+     * 재고 복구 (주문 취소 시 사용 - LockManager 기반 동시성 제어)
      * 
      * @param productId 상품 ID
      * @param quantity 복구할 수량
      * @throws IllegalArgumentException 상품 또는 재고를 찾을 수 없는 경우
+     * @throws RuntimeException 락 획득 실패 또는 동시성 오류
      */
     public void restoreStock(Long productId, int quantity) {
+        if (productId == null) {
+            throw new IllegalArgumentException("상품 ID는 null일 수 없습니다.");
+        }
         if (quantity <= 0) {
             throw new IllegalArgumentException("복구할 수량은 0보다 커야 합니다.");
         }
 
-        // 상품별 락 획득
-        Object lock = stockLocks.computeIfAbsent(productId, k -> new Object());
+        String lockKey = InMemoryLockManager.createStockLockKey(productId);
         
-        synchronized (lock) {
+        lockManager.executeWithLock(lockKey, () -> {
             Product product = productRepository.findById(productId)
                     .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId));
 
@@ -217,6 +243,7 @@ public class StockService {
             
             boolean wasEmpty = stock.isEmpty();
             
+            // 원자적 재고 복구
             stock.restoreStock(Quantity.of(quantity));
             stockRepository.save(stock);
 
@@ -225,7 +252,9 @@ public class StockService {
                 product.markInStock();
                 productRepository.save(product);
             }
-        }
+            
+            return null; // Void 작업이므로 null 반환
+        });
     }
 
     /**
