@@ -273,4 +273,15 @@ public class InMemoryPaymentRepository implements PaymentRepository {
                              !payment.getCreatedAt().isAfter(endDate))
             .count();
     }
+
+    @Override
+    public boolean existsByOrderIdAndState(Long orderId, PaymentState state) {
+        if (orderId == null || state == null) {
+            return false;
+        }
+        
+        return store.values().stream()
+            .anyMatch(payment -> orderId.equals(payment.getOrderId()) && 
+                               state.equals(payment.getState()));
+    }
 }

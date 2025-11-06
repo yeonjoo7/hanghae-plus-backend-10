@@ -73,7 +73,6 @@ class ConcurrencyTestSuite {
         // 테스트 사용자 (충분한 포인트)
         testUser = User.create(
             "test@example.com",
-            UserType.CUSTOMER,
             "테스트 사용자",
             "010-1234-5678"
         );
@@ -90,7 +89,7 @@ class ConcurrencyTestSuite {
         testProduct = productRepository.save(testProduct);
 
         // 테스트 재고
-        testStock = Stock.create(testProduct.getId(), null, Quantity.of(100));
+        testStock = Stock.createForProduct(testProduct.getId(), Quantity.of(100), null);
         testStock = stockRepository.save(testStock);
 
         // 테스트 쿠폰
@@ -113,7 +112,7 @@ class ConcurrencyTestSuite {
         int concurrentUsers = 50; // 50명 동시 구매 시도
 
         // 한정 재고 설정
-        Stock limitedStockItem = Stock.create(testProduct.getId(), null, Quantity.of(limitedStock));
+        Stock limitedStockItem = Stock.createForProduct(testProduct.getId(), Quantity.of(limitedStock), null);
         stockRepository.save(limitedStockItem);
 
         // 한정 쿠폰 설정
@@ -124,14 +123,13 @@ class ConcurrencyTestSuite {
             LocalDateTime.now(),
             LocalDateTime.now().plusHours(1)
         );
-        limitedCoupon = couponRepository.save(limitedCoupon);
+        final Coupon finalLimitedCoupon = couponRepository.save(limitedCoupon);
 
         // 여러 사용자 생성
         List<User> users = new ArrayList<>();
         for (int i = 1; i <= concurrentUsers; i++) {
             User user = User.create(
                 "user" + i + "@test.com",
-                UserType.CUSTOMER,
                 "사용자" + i,
                 "010-0000-" + String.format("%04d", i)
             );
@@ -160,7 +158,7 @@ class ConcurrencyTestSuite {
                     boolean hasCoupon = false;
                     if (shouldTryCoupon) {
                         try {
-                            couponService.issueCoupon(user.getId(), limitedCoupon.getId());
+                            couponService.issueCoupon(user.getId(), finalLimitedCoupon.getId());
                             successfulCouponIssues.incrementAndGet();
                             hasCoupon = true;
                         } catch (Exception e) {
@@ -234,9 +232,9 @@ class ConcurrencyTestSuite {
             Money.of(500),
             Quantity.of(maxQuantityPerUser)
         );
-        flashSaleProduct = productRepository.save(flashSaleProduct);
+        final Product finalFlashSaleProduct = productRepository.save(flashSaleProduct);
 
-        Stock flashSaleStockItem = Stock.create(flashSaleProduct.getId(), null, Quantity.of(flashSaleStock));
+        Stock flashSaleStockItem = Stock.createForProduct(flashSaleProduct.getId(), Quantity.of(flashSaleStock), null);
         stockRepository.save(flashSaleStockItem);
 
         // 플래시 세일 쿠폰
@@ -247,14 +245,13 @@ class ConcurrencyTestSuite {
             LocalDateTime.now(),
             LocalDateTime.now().plusMinutes(30)
         );
-        flashSaleCoupon = couponRepository.save(flashSaleCoupon);
+        final Coupon finalFlashSaleCoupon = couponRepository.save(flashSaleCoupon);
 
         // 대량 사용자 생성
         List<User> users = new ArrayList<>();
         for (int i = 1; i <= concurrentUsers; i++) {
             User user = User.create(
                 "flashuser" + i + "@test.com",
-                UserType.CUSTOMER,
                 "플래시사용자" + i,
                 "010-1111-" + String.format("%04d", i)
             );
@@ -285,7 +282,7 @@ class ConcurrencyTestSuite {
                     boolean gotCoupon = false;
                     if (Math.random() < 0.5) {
                         try {
-                            couponService.issueCoupon(user.getId(), flashSaleCoupon.getId());
+                            couponService.issueCoupon(user.getId(), finalFlashSaleCoupon.getId());
                             gotCoupon = true;
                         } catch (Exception e) {
                             // 쿠폰 발급 실패
@@ -294,7 +291,7 @@ class ConcurrencyTestSuite {
 
                     // 재고 차감 시도
                     try {
-                        stockService.reduceStock(flashSaleProduct.getId(), purchaseQuantity);
+                        stockService.reduceStock(finalFlashSaleProduct.getId(), purchaseQuantity);
                         totalPurchases.incrementAndGet();
                         totalQuantityPurchased.addAndGet(purchaseQuantity);
                         
@@ -303,7 +300,7 @@ class ConcurrencyTestSuite {
                         }
 
                         // 판매량 기록
-                        popularProductService.recordSale(flashSaleProduct.getId(), purchaseQuantity, null);
+                        popularProductService.recordSale(finalFlashSaleProduct.getId(), purchaseQuantity, null);
 
                     } catch (Exception e) {
                         // 재고 부족으로 구매 실패
@@ -460,7 +457,12 @@ class ConcurrencyTestSuite {
             futures.toArray(new CompletableFuture[0])
         );
 
-        allFutures.get(60, TimeUnit.SECONDS);
+        try {
+            allFutures.get(60, TimeUnit.SECONDS);
+        } catch (InterruptedException | java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("테스트 실행 중 오류가 발생했습니다", e);
+        }
         long endTime = System.currentTimeMillis();
 
         // then

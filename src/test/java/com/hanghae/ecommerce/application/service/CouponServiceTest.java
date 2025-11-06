@@ -53,7 +53,7 @@ class CouponServiceTest {
 
     @BeforeEach
     void setUp() {
-        testUser = User.create("test@example.com", UserType.CUSTOMER, "테스트", "010-1234-5678");
+        testUser = User.create("test@example.com", "테스트", "010-1234-5678");
         testCoupon = Coupon.create(
             "테스트 쿠폰",
             DiscountPolicy.rate(10),
@@ -75,7 +75,7 @@ class CouponServiceTest {
             return task.execute();
         });
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
-        when(couponRepository.findById(couponId)).thenReturn(Optional.of(testCoupon));
+        when(couponRepository.findByIdForUpdate(couponId)).thenReturn(Optional.of(testCoupon));
         when(userCouponRepository.existsByUserIdAndCouponId(userId, couponId)).thenReturn(false);
         when(userCouponRepository.save(any(UserCoupon.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(couponRepository.save(any(Coupon.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -98,16 +98,12 @@ class CouponServiceTest {
         Long userId = 1L;
         Long couponId = 1L;
 
-        when(lockManager.executeWithLock(anyString(), any())).thenAnswer(invocation -> {
-            var task = (LockManager.LockTask<?>) invocation.getArgument(1);
-            return task.execute();
-        });
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> couponService.issueCoupon(userId, couponId))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("사용자를 찾을 수 없습니다");
+            .hasMessageContaining("사용자를 찾을 수 없습니다. ID: " + userId);
     }
 
     @Test
@@ -122,12 +118,12 @@ class CouponServiceTest {
             return task.execute();
         });
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
-        when(couponRepository.findById(couponId)).thenReturn(Optional.empty());
+        when(couponRepository.findByIdForUpdate(couponId)).thenReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> couponService.issueCoupon(userId, couponId))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("쿠폰을 찾을 수 없습니다");
+            .hasMessageContaining("쿠폰을 찾을 수 없습니다. ID: " + couponId);
     }
 
     @Test
@@ -137,12 +133,7 @@ class CouponServiceTest {
         Long userId = 1L;
         Long couponId = 1L;
 
-        when(lockManager.executeWithLock(anyString(), any())).thenAnswer(invocation -> {
-            var task = (LockManager.LockTask<?>) invocation.getArgument(1);
-            return task.execute();
-        });
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
-        when(couponRepository.findById(couponId)).thenReturn(Optional.of(testCoupon));
         when(userCouponRepository.existsByUserIdAndCouponId(userId, couponId)).thenReturn(true);
 
         // when & then
@@ -163,7 +154,7 @@ class CouponServiceTest {
             "품절 쿠폰",
             DiscountPolicy.rate(10),
             Quantity.of(1),
-            LocalDateTime.now(),
+            LocalDateTime.now().minusHours(1), // 이미 시작된 상태로
             LocalDateTime.now().plusDays(7)
         );
         soldOutCoupon.issue(); // 1개 발급으로 소진
@@ -173,7 +164,7 @@ class CouponServiceTest {
             return task.execute();
         });
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
-        when(couponRepository.findById(couponId)).thenReturn(Optional.of(soldOutCoupon));
+        when(couponRepository.findByIdForUpdate(couponId)).thenReturn(Optional.of(soldOutCoupon));
         when(userCouponRepository.existsByUserIdAndCouponId(userId, couponId)).thenReturn(false);
 
         // when & then
@@ -188,11 +179,12 @@ class CouponServiceTest {
         // given
         Long userId = 1L;
         List<UserCoupon> userCoupons = List.of(
-            UserCoupon.create(userId, 1L),
-            UserCoupon.create(userId, 2L)
+            UserCoupon.issue(userId, 1L, LocalDateTime.now().plusDays(7)),
+            UserCoupon.issue(userId, 2L, LocalDateTime.now().plusDays(7))
         );
 
-        when(userCouponRepository.findByUserId(userId)).thenReturn(userCoupons);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
+        when(userCouponRepository.findByUserIdOrderByIssuedAtDesc(userId)).thenReturn(userCoupons);
         when(couponRepository.findById(1L)).thenReturn(Optional.of(testCoupon));
         when(couponRepository.findById(2L)).thenReturn(Optional.of(testCoupon));
 
@@ -211,7 +203,7 @@ class CouponServiceTest {
         Long userId = 1L;
         Long userCouponId = 1L;
 
-        UserCoupon userCoupon = UserCoupon.create(userId, 1L);
+        UserCoupon userCoupon = UserCoupon.issue(userId, 1L, LocalDateTime.now().plusDays(7));
         when(userCouponRepository.findById(userCouponId)).thenReturn(Optional.of(userCoupon));
         when(userCouponRepository.save(any(UserCoupon.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -235,7 +227,7 @@ class CouponServiceTest {
         // when & then
         assertThatThrownBy(() -> couponService.useCoupon(userId, userCouponId))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("사용자 쿠폰을 찾을 수 없습니다");
+            .hasMessageContaining("사용자 쿠폰을 찾을 수 없습니다. ID: " + userCouponId);
     }
 
     @Test
@@ -246,7 +238,7 @@ class CouponServiceTest {
         Long userCouponId = 1L;
         Long otherUserId = 2L;
 
-        UserCoupon userCoupon = UserCoupon.create(otherUserId, 1L);
+        UserCoupon userCoupon = UserCoupon.issue(otherUserId, 1L, LocalDateTime.now().plusDays(7));
         when(userCouponRepository.findById(userCouponId)).thenReturn(Optional.of(userCoupon));
 
         // when & then

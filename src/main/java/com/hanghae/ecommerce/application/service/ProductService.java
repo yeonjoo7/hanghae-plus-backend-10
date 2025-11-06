@@ -142,8 +142,12 @@ public class ProductService {
         LocalDateTime startDate = endDate.minusDays(days);
 
         // 기간 내 상품별 판매 수량 조회
-        List<ProductSalesInfo> salesInfoList = orderItemRepository.findTopSellingProducts(
+        List<OrderItemRepository.ProductSalesInfo> repositorySalesInfoList = orderItemRepository.findTopSellingProducts(
                 startDate, endDate, limit);
+        
+        List<ProductSalesInfo> salesInfoList = repositorySalesInfoList.stream()
+            .map(repoInfo -> new ProductSalesInfo(repoInfo.getProductId(), repoInfo.getTotalQuantity().intValue()))
+            .collect(Collectors.toList());
 
         if (salesInfoList.isEmpty()) {
             return List.of();

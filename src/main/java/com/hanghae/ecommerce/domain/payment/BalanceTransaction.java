@@ -82,7 +82,7 @@ public class BalanceTransaction {
             userId,
             orderId,
             TransactionType.PAYMENT,
-            Point.of(-paymentAmount.getValue()), // 음수로 저장
+            paymentAmount, // 양수로 저장, 타입으로 구분
             currentBalance,
             newBalance,
             description,

@@ -45,10 +45,10 @@ class StockServiceTest {
             "테스트 상품",
             "테스트 상품 설명",
             Money.of(10000),
-            Quantity.of(5)
+            null // 구매 제한 없음
         );
 
-        testStock = Stock.create(1L, null, Quantity.of(100));
+        testStock = Stock.createForProduct(1L, Quantity.of(100), null);
     }
 
     @Test
@@ -78,7 +78,7 @@ class StockServiceTest {
         // when & then
         assertThatThrownBy(() -> stockService.getStock(productId))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("재고를 찾을 수 없습니다");
+            .hasMessageContaining("재고를 찾을 수 없습니다. ProductID: " + productId);
     }
 
     @Test
@@ -92,7 +92,8 @@ class StockServiceTest {
             var task = (LockManager.LockTask<?>) invocation.getArgument(1);
             return task.execute();
         });
-        when(stockRepository.findByProductIdAndProductOptionIdIsNull(productId))
+        when(productRepository.findById(productId)).thenReturn(Optional.of(testProduct));
+        when(stockRepository.findByProductIdAndProductOptionIdIsNullForUpdate(productId))
             .thenReturn(Optional.of(testStock));
         when(stockRepository.save(any(Stock.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -116,12 +117,13 @@ class StockServiceTest {
             var task = (LockManager.LockTask<?>) invocation.getArgument(1);
             return task.execute();
         });
-        when(stockRepository.findByProductIdAndProductOptionIdIsNull(productId))
+        when(productRepository.findById(productId)).thenReturn(Optional.of(testProduct));
+        when(stockRepository.findByProductIdAndProductOptionIdIsNullForUpdate(productId))
             .thenReturn(Optional.of(testStock));
 
         // when & then
         assertThatThrownBy(() -> stockService.reduceStock(productId, quantity))
-            .isInstanceOf(IllegalStateException.class)
+            .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("재고가 부족합니다");
     }
 
@@ -135,7 +137,7 @@ class StockServiceTest {
         // when & then
         assertThatThrownBy(() -> stockService.reduceStock(productId, quantity))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("수량은 0보다 커야 합니다");
+            .hasMessageContaining("차감할 수량은 0보다 커야 합니다");
     }
 
     @Test
@@ -152,7 +154,8 @@ class StockServiceTest {
             var task = (LockManager.LockTask<?>) invocation.getArgument(1);
             return task.execute();
         });
-        when(stockRepository.findByProductIdAndProductOptionIdIsNull(productId))
+        when(productRepository.findById(productId)).thenReturn(Optional.of(testProduct));
+        when(stockRepository.findByProductIdAndProductOptionIdIsNullForUpdate(productId))
             .thenReturn(Optional.of(testStock));
         when(stockRepository.save(any(Stock.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -177,13 +180,14 @@ class StockServiceTest {
             var task = (LockManager.LockTask<?>) invocation.getArgument(1);
             return task.execute();
         });
-        when(stockRepository.findByProductIdAndProductOptionIdIsNull(productId))
+        when(productRepository.findById(productId)).thenReturn(Optional.of(testProduct));
+        when(stockRepository.findByProductIdAndProductOptionIdIsNullForUpdate(productId))
             .thenReturn(Optional.of(testStock));
 
         // when & then
         assertThatThrownBy(() -> stockService.restoreStock(productId, quantity))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("복원할 재고가 부족합니다");
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("복원할 재고가 판매된 수량보다 클 수 없습니다");
     }
 
     @Test
@@ -196,7 +200,7 @@ class StockServiceTest {
         // when & then
         assertThatThrownBy(() -> stockService.restoreStock(productId, quantity))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("수량은 0보다 커야 합니다");
+            .hasMessageContaining("복구할 수량은 0보다 커야 합니다");
     }
 
     @Test
@@ -210,12 +214,13 @@ class StockServiceTest {
             var task = (LockManager.LockTask<?>) invocation.getArgument(1);
             return task.execute();
         });
-        when(stockRepository.findByProductIdAndProductOptionIdIsNull(productId))
+        when(productRepository.findById(productId)).thenReturn(Optional.of(testProduct));
+        when(stockRepository.findByProductIdAndProductOptionIdIsNullForUpdate(productId))
             .thenReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> stockService.reduceStock(productId, quantity))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("재고를 찾을 수 없습니다");
+            .hasMessageContaining("재고를 찾을 수 없습니다. ProductID: " + productId);
     }
 }

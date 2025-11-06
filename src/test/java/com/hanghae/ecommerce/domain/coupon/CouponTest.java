@@ -26,7 +26,7 @@ class CouponTest {
 
         // then
         assertThat(coupon.getName()).isEqualTo(name);
-        assertThat(coupon.getState()).isEqualTo(CouponState.ACTIVE);
+        assertThat(coupon.getState()).isEqualTo(CouponState.NORMAL);
         assertThat(coupon.getTotalQuantity()).isEqualTo(totalQuantity);
         assertThat(coupon.getIssuedQuantity().getValue()).isZero();
         assertThat(coupon.getRemainingQuantity().getValue()).isEqualTo(100);
@@ -45,7 +45,7 @@ class CouponTest {
         // when & then
         assertThatThrownBy(() -> Coupon.create(emptyName, discountPolicy, totalQuantity, beginDate, endDate))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("쿠폰 이름은 필수입니다");
+            .hasMessageContaining("쿠폰명은 필수입니다");
     }
 
     @Test
@@ -61,7 +61,7 @@ class CouponTest {
         // when & then
         assertThatThrownBy(() -> Coupon.create(name, discountPolicy, totalQuantity, beginDate, endDate))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("종료일은 시작일보다 이후여야 합니다");
+            .hasMessageContaining("사용 시작일시는 종료일시보다 이전이어야 합니다");
     }
 
     @Test
@@ -100,7 +100,7 @@ class CouponTest {
         // when & then
         assertThatThrownBy(coupon::issue)
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("쿠폰이 모두 소진되었습니다");
+            .hasMessageContaining("쿠폰을 발급할 수 없습니다");
     }
 
     @Test
@@ -114,12 +114,12 @@ class CouponTest {
             LocalDateTime.now(),
             LocalDateTime.now().plusDays(7)
         );
-        coupon.deactivate();
+        coupon.discontinue();
 
         // when & then
         assertThatThrownBy(coupon::issue)
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("비활성 쿠폰은 발급할 수 없습니다");
+            .hasMessageContaining("쿠폰을 발급할 수 없습니다");
     }
 
     @Test
@@ -137,12 +137,12 @@ class CouponTest {
         // when & then
         assertThatThrownBy(coupon::issue)
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("만료된 쿠폰은 발급할 수 없습니다");
+            .hasMessageContaining("쿠폰을 발급할 수 없습니다");
     }
 
     @Test
     @DisplayName("쿠폰 만료 확인")
-    void isExpired() {
+    void isWithinValidPeriod() {
         // given
         Coupon activeCoupon = Coupon.create(
             "활성 쿠폰",
@@ -161,13 +161,13 @@ class CouponTest {
         );
 
         // when & then
-        assertThat(activeCoupon.isExpired()).isFalse();
-        assertThat(expiredCoupon.isExpired()).isTrue();
+        assertThat(activeCoupon.isWithinValidPeriod()).isTrue();
+        assertThat(expiredCoupon.isWithinValidPeriod()).isFalse();
     }
 
     @Test
-    @DisplayName("쿠폰 활성화/비활성화")
-    void activateAndDeactivate() {
+    @DisplayName("쿠폰 상태 변경")
+    void stateChange() {
         // given
         Coupon coupon = Coupon.create(
             "테스트 쿠폰",
@@ -178,13 +178,21 @@ class CouponTest {
         );
 
         // when & then
-        assertThat(coupon.getState()).isEqualTo(CouponState.ACTIVE);
+        assertThat(coupon.getState()).isEqualTo(CouponState.NORMAL);
 
-        coupon.deactivate();
-        assertThat(coupon.getState()).isEqualTo(CouponState.INACTIVE);
+        coupon.discontinue();
+        assertThat(coupon.getState()).isEqualTo(CouponState.DISCONTINUED);
 
-        coupon.activate();
-        assertThat(coupon.getState()).isEqualTo(CouponState.ACTIVE);
+        // 다시 생성하여 만료 처리 테스트
+        Coupon newCoupon = Coupon.create(
+            "테스트 쿠폰2",
+            DiscountPolicy.rate(10),
+            Quantity.of(10),
+            LocalDateTime.now(),
+            LocalDateTime.now().plusDays(7)
+        );
+        newCoupon.expire();
+        assertThat(newCoupon.getState()).isEqualTo(CouponState.EXPIRED);
     }
 
     @Test
@@ -206,7 +214,7 @@ class CouponTest {
             LocalDateTime.now(),
             LocalDateTime.now().plusDays(7)
         );
-        inactiveCoupon.deactivate();
+        inactiveCoupon.discontinue();
 
         Coupon soldOutCoupon = Coupon.create(
             "품절 쿠폰",

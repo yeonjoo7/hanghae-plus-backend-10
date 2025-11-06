@@ -41,7 +41,6 @@ class UserServiceTest {
     void setUp() {
         testUser = User.create(
             "test@example.com",
-            UserType.CUSTOMER,
             "테스트 사용자",
             "010-1234-5678"
         );
@@ -56,11 +55,11 @@ class UserServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
 
         // when
-        User result = userService.getUser(userId);
+        User result = userService.getUserById(userId);
 
         // then
         assertThat(result).isEqualTo(testUser);
-        assertThat(result.getEmail().getValue()).isEqualTo("test@example.com");
+        assertThat(result.getEmail()).isEqualTo("test@example.com");
     }
 
     @Test
@@ -71,7 +70,7 @@ class UserServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> userService.getUser(userId))
+        assertThatThrownBy(() -> userService.getUserById(userId))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("사용자를 찾을 수 없습니다");
     }
@@ -96,7 +95,7 @@ class UserServiceTest {
         // given
         Long userId = 1L;
         Point chargeAmount = Point.of(5000);
-        Point initialBalance = testUser.getBalance();
+        Point initialBalance = testUser.getAvailablePoint();
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -111,7 +110,7 @@ class UserServiceTest {
         assertThat(result.getAmount()).isEqualTo(chargeAmount);
         assertThat(result.getBalanceBefore()).isEqualTo(initialBalance);
         assertThat(result.getBalanceAfter().getValue()).isEqualTo(15000);
-        assertThat(testUser.getBalance().getValue()).isEqualTo(15000);
+        assertThat(testUser.getAvailablePoint().getValue()).isEqualTo(15000);
     }
 
     @Test
@@ -119,12 +118,12 @@ class UserServiceTest {
     void chargePoint_InvalidAmount() {
         // given
         Long userId = 1L;
-        Point invalidAmount = Point.of(-1000); // 음수 금액
+        Point invalidAmount = Point.of(500); // 1000원 미만 금액
 
         // when & then
         assertThatThrownBy(() -> userService.chargePoint(userId, invalidAmount))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("충전 금액은 0보다 커야 합니다");
+            .hasMessageContaining("충전 금액은 1,000원 이상이어야 합니다");
     }
 
     @Test
@@ -134,7 +133,7 @@ class UserServiceTest {
         Long userId = 1L;
         Long orderId = 1L;
         Point useAmount = Point.of(3000);
-        Point initialBalance = testUser.getBalance();
+        Point initialBalance = testUser.getAvailablePoint();
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -145,12 +144,12 @@ class UserServiceTest {
         BalanceTransaction result = userService.usePoint(userId, useAmount, orderId, "주문 결제");
 
         // then
-        assertThat(result.getType()).isEqualTo(TransactionType.USE);
+        assertThat(result.getType()).isEqualTo(TransactionType.PAYMENT);
         assertThat(result.getAmount()).isEqualTo(useAmount);
         assertThat(result.getBalanceBefore()).isEqualTo(initialBalance);
         assertThat(result.getBalanceAfter().getValue()).isEqualTo(7000);
         assertThat(result.getOrderId()).isEqualTo(orderId);
-        assertThat(testUser.getBalance().getValue()).isEqualTo(7000);
+        assertThat(testUser.getAvailablePoint().getValue()).isEqualTo(7000);
     }
 
     @Test
@@ -175,7 +174,7 @@ class UserServiceTest {
         // given
         Long userId = 1L;
         Long orderId = 1L;
-        Point invalidAmount = Point.of(-1000); // 음수 금액
+        Point invalidAmount = Point.of(0); // 0 금액
 
         // when & then
         assertThatThrownBy(() -> userService.usePoint(userId, invalidAmount, orderId, "주문 결제"))
@@ -193,7 +192,7 @@ class UserServiceTest {
 
         // 먼저 포인트를 사용한 상태로 만들기
         testUser.usePoint(Point.of(3000));
-        Point balanceAfterUse = testUser.getBalance();
+        Point balanceAfterUse = testUser.getAvailablePoint();
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -209,7 +208,7 @@ class UserServiceTest {
         assertThat(result.getBalanceBefore()).isEqualTo(balanceAfterUse);
         assertThat(result.getBalanceAfter().getValue()).isEqualTo(10000); // 원래 잔액으로 복원
         assertThat(result.getOrderId()).isEqualTo(orderId);
-        assertThat(testUser.getBalance().getValue()).isEqualTo(10000);
+        assertThat(testUser.getAvailablePoint().getValue()).isEqualTo(10000);
     }
 
     @Test
@@ -218,7 +217,7 @@ class UserServiceTest {
         // given
         Long userId = 1L;
         Long orderId = 1L;
-        Point invalidAmount = Point.of(-1000); // 음수 금액
+        Point invalidAmount = Point.of(0); // 0 금액
 
         // when & then
         assertThatThrownBy(() -> userService.refundPoint(userId, invalidAmount, orderId))
@@ -228,27 +227,28 @@ class UserServiceTest {
 
     @Test
     @DisplayName("거래 내역 조회 성공")
-    void getBalanceHistory_Success() {
+    void getTransactionHistory_Success() {
         // given
         Long userId = 1L;
         List<BalanceTransaction> transactions = new ArrayList<>();
         transactions.add(BalanceTransaction.createCharge(
-            userId, Point.of(10000), Point.of(0), Point.of(10000), "초기 충전"
+            userId, Point.of(10000), Point.of(0), "초기 충전"
         ));
-        transactions.add(BalanceTransaction.createUse(
-            userId, Point.of(3000), Point.of(10000), Point.of(7000), 1L, "주문 결제"
+        transactions.add(BalanceTransaction.createPayment(
+            userId, 1L, Point.of(3000), Point.of(10000), "주문 결제"
         ));
 
-        when(balanceTransactionRepository.findByUserIdOrderByCreatedAtDesc(userId))
+        when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
+        when(balanceTransactionRepository.findByUserId(userId))
             .thenReturn(transactions);
 
         // when
-        List<BalanceTransaction> result = userService.getBalanceHistory(userId);
+        List<BalanceTransaction> result = userService.getTransactionHistory(userId);
 
         // then
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getType()).isEqualTo(TransactionType.CHARGE);
-        assertThat(result.get(1).getType()).isEqualTo(TransactionType.USE);
+        assertThat(result.get(1).getType()).isEqualTo(TransactionType.PAYMENT);
     }
 
     @Test
@@ -256,21 +256,20 @@ class UserServiceTest {
     void createUser_Success() {
         // given
         String email = "new@example.com";
-        UserType userType = UserType.CUSTOMER;
         String name = "신규 사용자";
         String phoneNumber = "010-9876-5432";
 
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // when
-        User result = userService.createUser(email, userType, name, phoneNumber);
+        User result = userService.createUser(email, name, phoneNumber);
 
         // then
-        assertThat(result.getEmail().getValue()).isEqualTo(email);
-        assertThat(result.getUserType()).isEqualTo(userType);
+        assertThat(result.getEmail()).isEqualTo(email);
+        assertThat(result.getType()).isEqualTo(UserType.CUSTOMER);
         assertThat(result.getName()).isEqualTo(name);
-        assertThat(result.getPhoneNumber()).isEqualTo(phoneNumber);
-        assertThat(result.getBalance().getValue()).isZero();
+        assertThat(result.getPhone()).isEqualTo(phoneNumber);
+        assertThat(result.getAvailablePoint().getValue()).isZero();
         verify(userRepository).save(any(User.class));
     }
 }

@@ -63,7 +63,7 @@ class StockConcurrencyTest {
         testProduct = productRepository.save(testProduct);
 
         // 테스트 재고 생성 (초기 재고: 1000개)
-        testStock = Stock.create(testProduct.getId(), null, Quantity.of(1000));
+        testStock = Stock.createForProduct(testProduct.getId(), Quantity.of(1000), null);
         testStock = stockRepository.save(testStock);
     }
 
@@ -139,7 +139,7 @@ class StockConcurrencyTest {
         int quantityPerUser = 1;
 
         // 재고를 100개로 설정
-        Stock limitedStock = Stock.create(testProduct.getId(), null, Quantity.of(initialStock));
+        Stock limitedStock = Stock.createForProduct(testProduct.getId(), Quantity.of(initialStock), null);
         stockRepository.save(limitedStock);
 
         ExecutorService executorService = Executors.newFixedThreadPool(50);
@@ -195,7 +195,7 @@ class StockConcurrencyTest {
         int quantityPerUser = 20; // 각 사용자가 20개씩 구매
 
         // 대량 재고 설정
-        Stock highVolumeStock = Stock.create(testProduct.getId(), null, Quantity.of(initialStock));
+        Stock highVolumeStock = Stock.createForProduct(testProduct.getId(), Quantity.of(initialStock), null);
         stockRepository.save(highVolumeStock);
 
         ExecutorService executorService = Executors.newFixedThreadPool(100);
@@ -258,7 +258,7 @@ class StockConcurrencyTest {
         int initialStock = 500;
         int operations = 200; // 차감 100번, 복원 100번
 
-        Stock testStock = Stock.create(testProduct.getId(), null, Quantity.of(initialStock));
+        Stock testStock = Stock.createForProduct(testProduct.getId(), Quantity.of(initialStock), null);
         stockRepository.save(testStock);
 
         ExecutorService executorService = Executors.newFixedThreadPool(50);
@@ -339,7 +339,7 @@ class StockConcurrencyTest {
             product = productRepository.save(product);
             products.add(product);
 
-            Stock stock = Stock.create(product.getId(), null, Quantity.of(100));
+            Stock stock = Stock.createForProduct(product.getId(), Quantity.of(100), null);
             stock = stockRepository.save(stock);
             stocks.add(stock);
         }
@@ -392,7 +392,7 @@ class StockConcurrencyTest {
         int operations = 1000;
         int threadPoolSize = 100;
 
-        Stock performanceStock = Stock.create(testProduct.getId(), null, Quantity.of(operations));
+        Stock performanceStock = Stock.createForProduct(testProduct.getId(), Quantity.of(operations), null);
         stockRepository.save(performanceStock);
 
         ExecutorService executorService = Executors.newFixedThreadPool(threadPoolSize);

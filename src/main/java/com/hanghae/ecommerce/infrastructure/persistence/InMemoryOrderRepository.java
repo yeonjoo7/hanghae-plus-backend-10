@@ -279,4 +279,57 @@ public class InMemoryOrderRepository implements OrderRepository {
                            !order.getCreatedAt().isAfter(endDate))
             .count();
     }
+
+    @Override
+    public List<Order> findByUserIdAndStateAndCreatedAtBetweenOrderByCreatedAtDesc(Long userId, OrderState state, LocalDateTime startDate, LocalDateTime endDate) {
+        if (userId == null || state == null || startDate == null || endDate == null) {
+            return List.of();
+        }
+        
+        return store.values().stream()
+            .filter(order -> userId.equals(order.getUserId()) &&
+                           state.equals(order.getState()) &&
+                           !order.getCreatedAt().isBefore(startDate) &&
+                           !order.getCreatedAt().isAfter(endDate))
+            .sorted((o1, o2) -> o2.getCreatedAt().compareTo(o1.getCreatedAt()))
+            .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Order> findByUserIdAndCreatedAtBetweenOrderByCreatedAtDesc(Long userId, LocalDateTime startDate, LocalDateTime endDate) {
+        if (userId == null || startDate == null || endDate == null) {
+            return List.of();
+        }
+        
+        return store.values().stream()
+            .filter(order -> userId.equals(order.getUserId()) &&
+                           !order.getCreatedAt().isBefore(startDate) &&
+                           !order.getCreatedAt().isAfter(endDate))
+            .sorted((o1, o2) -> o2.getCreatedAt().compareTo(o1.getCreatedAt()))
+            .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Order> findByUserIdAndStateOrderByCreatedAtDesc(Long userId, OrderState state) {
+        if (userId == null || state == null) {
+            return List.of();
+        }
+        
+        return store.values().stream()
+            .filter(order -> userId.equals(order.getUserId()) && state.equals(order.getState()))
+            .sorted((o1, o2) -> o2.getCreatedAt().compareTo(o1.getCreatedAt()))
+            .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Order> findByUserIdOrderByCreatedAtDesc(Long userId) {
+        if (userId == null) {
+            return List.of();
+        }
+        
+        return store.values().stream()
+            .filter(order -> userId.equals(order.getUserId()))
+            .sorted((o1, o2) -> o2.getCreatedAt().compareTo(o1.getCreatedAt()))
+            .collect(Collectors.toList());
+    }
 }

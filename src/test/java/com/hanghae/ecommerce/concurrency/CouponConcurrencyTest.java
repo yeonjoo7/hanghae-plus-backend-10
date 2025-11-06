@@ -78,7 +78,6 @@ class CouponConcurrencyTest {
         for (int i = 1; i <= 1000; i++) {
             User user = User.create(
                 "user" + i + "@test.com",
-                UserType.CUSTOMER,
                 "테스트유저" + i,
                 "010-0000-" + String.format("%04d", i)
             );
@@ -235,14 +234,15 @@ class CouponConcurrencyTest {
     void testVariousConcurrencyScenarios() throws InterruptedException {
         // given
         // 소량 쿠폰 생성 (5개)
-        Coupon limitedCoupon = Coupon.create(
-            "초소량 쿠폰",
-            DiscountPolicy.amount(Money.of(1000)),
-            Quantity.of(5),
-            LocalDateTime.now(),
-            LocalDateTime.now().plusHours(1)
+        final Coupon limitedCoupon = couponRepository.save(
+            Coupon.create(
+                "초소량 쿠폰",
+                DiscountPolicy.amount(Money.of(1000)),
+                Quantity.of(5),
+                LocalDateTime.now(),
+                LocalDateTime.now().plusHours(1)
+            )
         );
-        limitedCoupon = couponRepository.save(limitedCoupon);
         
         int concurrentUsers = 20;
         ExecutorService executorService = Executors.newFixedThreadPool(10);

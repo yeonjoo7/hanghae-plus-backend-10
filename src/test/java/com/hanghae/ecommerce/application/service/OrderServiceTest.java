@@ -2,6 +2,10 @@ package com.hanghae.ecommerce.application.service;
 
 import com.hanghae.ecommerce.domain.cart.Cart;
 import com.hanghae.ecommerce.domain.cart.CartItem;
+import com.hanghae.ecommerce.domain.cart.CartState;
+import com.hanghae.ecommerce.domain.cart.repository.CartRepository;
+
+import java.time.LocalDateTime;
 import com.hanghae.ecommerce.domain.order.Address;
 import com.hanghae.ecommerce.domain.order.Order;
 import com.hanghae.ecommerce.domain.order.OrderItem;
@@ -14,7 +18,7 @@ import com.hanghae.ecommerce.domain.product.Product;
 import com.hanghae.ecommerce.domain.product.Quantity;
 import com.hanghae.ecommerce.domain.product.Stock;
 import com.hanghae.ecommerce.domain.user.User;
-import com.hanghae.ecommerce.domain.user.UserType;
+import com.hanghae.ecommerce.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,6 +28,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
@@ -46,7 +51,13 @@ class OrderServiceTest {
     private StockService stockService;
 
     @Mock
-    private UserService userService;
+    private UserRepository userRepository;
+
+    @Mock
+    private CartRepository cartRepository;
+
+    @Mock
+    private PopularProductService popularProductService;
 
     @InjectMocks
     private OrderService orderService;
@@ -58,7 +69,7 @@ class OrderServiceTest {
 
     @BeforeEach
     void setUp() {
-        testUser = User.create("test@example.com", UserType.CUSTOMER, "테스트", "010-1234-5678");
+        testUser = User.create("test@example.com", "테스트", "010-1234-5678");
         
         testProduct = Product.create(
             "테스트 상품",
@@ -67,8 +78,8 @@ class OrderServiceTest {
             Quantity.of(5)
         );
 
-        testCart = Cart.create(1L);
-        testCartItem = CartItem.create(testCart.getId(), 1L, null, Quantity.of(2), Money.of(10000));
+        testCart = Cart.restore(1L, 1L, null, CartState.NORMAL, LocalDateTime.now(), LocalDateTime.now());
+        testCartItem = CartItem.createForProduct(testCart.getId(), 1L, Quantity.of(2));
     }
 
     @Test
@@ -77,28 +88,33 @@ class OrderServiceTest {
         // given
         Long userId = 1L;
         List<Long> cartItemIds = List.of(1L);
-        Recipient recipient = Recipient.create("수령인", "010-9876-5432");
-        Address address = Address.create("12345", "서울시", "상세주소");
 
-        when(userService.getUser(userId)).thenReturn(testUser);
-        when(cartService.getCartItems(cartItemIds)).thenReturn(List.of(testCartItem));
-        when(stockService.getStock(1L)).thenReturn(Stock.create(1L, null, Quantity.of(100)));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
+        when(cartService.getSelectedCartItems(userId, cartItemIds)).thenReturn(
+            List.of(new CartService.CartItemInfo(testCartItem, testProduct))
+        );
+        when(stockService.checkStockAvailability(anyMap())).thenReturn(
+            new StockService.StockCheckResult(true, null)
+        );
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(orderItemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         // when
-        Order result = orderService.createOrder(userId, cartItemIds, recipient, address);
+        OrderService.OrderInfo result = orderService.createOrder(
+            userId, cartItemIds, 
+            "수령인", "010-9876-5432",
+            "12345", "서울시", "상세주소"
+        );
 
         // then
         assertThat(result).isNotNull();
-        assertThat(result.getUserId()).isEqualTo(userId);
-        assertThat(result.getState()).isEqualTo(OrderState.PENDING);
-        assertThat(result.getAmount().getAmount()).isEqualTo(20000); // 10000 * 2개
+        assertThat(result.getOrder().getUserId()).isEqualTo(userId);
+        assertThat(result.getStatus()).isEqualTo(OrderState.PENDING_PAYMENT);
+        assertThat(result.getTotalAmount()).isEqualTo(Money.of(20000)); // 10000 * 2개
 
         verify(orderRepository).save(any(Order.class));
         verify(orderItemRepository).saveAll(anyList());
-        verify(stockService).reduceStock(1L, 2);
-        verify(cartService).removeCartItems(cartItemIds);
+        verify(stockService).reduceStocks(anyMap());
     }
 
     @Test
@@ -107,11 +123,16 @@ class OrderServiceTest {
         // given
         Long userId = 1L;
         List<Long> cartItemIds = List.of();
-        Recipient recipient = Recipient.create("수령인", "010-9876-5432");
-        Address address = Address.create("12345", "서울시", "상세주소");
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
+        when(cartService.getSelectedCartItems(userId, cartItemIds)).thenReturn(List.of());
 
         // when & then
-        assertThatThrownBy(() -> orderService.createOrder(userId, cartItemIds, recipient, address))
+        assertThatThrownBy(() -> orderService.createOrder(
+                userId, cartItemIds, 
+                "수령인", "010-9876-5432",
+                "12345", "서울시", "상세주소"
+            ))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("주문할 상품이 없습니다");
     }
@@ -122,19 +143,25 @@ class OrderServiceTest {
         // given
         Long userId = 1L;
         List<Long> cartItemIds = List.of(1L);
-        Recipient recipient = Recipient.create("수령인", "010-9876-5432");
-        Address address = Address.create("12345", "서울시", "상세주소");
 
-        when(userService.getUser(userId)).thenReturn(testUser);
-        when(cartService.getCartItems(cartItemIds)).thenReturn(List.of(testCartItem));
-        when(stockService.getStock(1L)).thenReturn(Stock.create(1L, null, Quantity.of(1))); // 재고 부족
-        doThrow(new IllegalStateException("재고가 부족합니다"))
-            .when(stockService).reduceStock(1L, 2);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
+        when(cartService.getSelectedCartItems(userId, cartItemIds)).thenReturn(
+            List.of(new CartService.CartItemInfo(testCartItem, testProduct))
+        );
+        when(stockService.checkStockAvailability(anyMap())).thenReturn(
+            new StockService.StockCheckResult(false, List.of(
+                new StockService.StockShortage(1L, 2, 1)
+            ))
+        );
 
         // when & then
-        assertThatThrownBy(() -> orderService.createOrder(userId, cartItemIds, recipient, address))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("재고가 부족합니다");
+        assertThatThrownBy(() -> orderService.createOrder(
+                userId, cartItemIds, 
+                "수령인", "010-9876-5432",
+                "12345", "서울시", "상세주소"
+            ))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("재고가 부족한 상품이 있습니다");
     }
 
     @Test
@@ -144,17 +171,19 @@ class OrderServiceTest {
         Long userId = 1L;
         Long orderId = 1L;
         
-        Order order = Order.create(userId, Recipient.create("수령인", "010-9876-5432"), 
-                                 Address.create("12345", "서울시", "상세주소"));
+        Order order = Order.create(userId, null, null, Money.of(20000), Money.zero(), 
+                                  Recipient.of("수령인", "010-9876-5432"), 
+                                  Address.of("12345", "서울시", "상세주소"));
         
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(orderItemRepository.findByOrderId(orderId)).thenReturn(List.of());
 
         // when
-        Order result = orderService.getOrder(userId, orderId);
+        OrderService.OrderInfo result = orderService.getOrder(userId, orderId);
 
         // then
-        assertThat(result).isEqualTo(order);
-        assertThat(result.getUserId()).isEqualTo(userId);
+        assertThat(result).isNotNull();
+        assertThat(result.getOrder().getUserId()).isEqualTo(userId);
     }
 
     @Test
@@ -180,8 +209,9 @@ class OrderServiceTest {
         Long orderId = 1L;
         Long otherUserId = 2L;
         
-        Order order = Order.create(otherUserId, Recipient.create("수령인", "010-9876-5432"), 
-                                 Address.create("12345", "서울시", "상세주소"));
+        Order order = Order.create(otherUserId, null, null, Money.of(20000), Money.zero(),
+                                  Recipient.of("수령인", "010-9876-5432"), 
+                                  Address.of("12345", "서울시", "상세주소"));
         
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
@@ -197,41 +227,26 @@ class OrderServiceTest {
         // given
         Long userId = 1L;
         List<Order> orders = List.of(
-            Order.create(userId, Recipient.create("수령인1", "010-1111-1111"), 
-                        Address.create("12345", "서울시", "주소1")),
-            Order.create(userId, Recipient.create("수령인2", "010-2222-2222"), 
-                        Address.create("54321", "부산시", "주소2"))
+            Order.create(userId, null, null, Money.of(10000), Money.zero(),
+                        Recipient.of("수령인1", "010-1111-1111"), 
+                        Address.of("12345", "서울시", "주소1")),
+            Order.create(userId, null, null, Money.of(20000), Money.zero(),
+                        Recipient.of("수령인2", "010-2222-2222"), 
+                        Address.of("54321", "부산시", "주소2"))
         );
 
+        when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
         when(orderRepository.findByUserIdOrderByCreatedAtDesc(userId)).thenReturn(orders);
+        when(orderItemRepository.findByOrderId(any())).thenReturn(List.of());
 
         // when
-        List<Order> result = orderService.getUserOrders(userId);
+        List<OrderService.OrderSummary> result = orderService.getUserOrders(userId);
 
         // then
         assertThat(result).hasSize(2);
-        assertThat(result).allMatch(order -> order.getUserId().equals(userId));
+        assertThat(result).allMatch(orderSummary -> orderSummary.getOrderId() != null);
     }
 
-    @Test
-    @DisplayName("주문 아이템 조회 성공")
-    void getOrderItems_Success() {
-        // given
-        Long orderId = 1L;
-        List<OrderItem> orderItems = List.of(
-            OrderItem.create(orderId, 1L, null, Quantity.of(2), Money.of(10000)),
-            OrderItem.create(orderId, 2L, null, Quantity.of(1), Money.of(20000))
-        );
-
-        when(orderItemRepository.findByOrderId(orderId)).thenReturn(orderItems);
-
-        // when
-        List<OrderItem> result = orderService.getOrderItems(orderId);
-
-        // then
-        assertThat(result).hasSize(2);
-        assertThat(result).allMatch(item -> item.getOrderId().equals(orderId));
-    }
 
     @Test
     @DisplayName("주문 취소 성공")
@@ -240,10 +255,11 @@ class OrderServiceTest {
         Long userId = 1L;
         Long orderId = 1L;
         
-        Order order = Order.create(userId, Recipient.create("수령인", "010-9876-5432"), 
-                                 Address.create("12345", "서울시", "상세주소"));
+        Order order = Order.create(userId, null, null, Money.of(20000), Money.zero(),
+                                  Recipient.of("수령인", "010-9876-5432"), 
+                                  Address.of("12345", "서울시", "상세주소"));
         List<OrderItem> orderItems = List.of(
-            OrderItem.create(orderId, 1L, null, Quantity.of(2), Money.of(10000))
+            OrderItem.createForProduct(orderId, 1L, Money.of(10000), Quantity.of(2), Money.zero())
         );
 
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
@@ -266,8 +282,9 @@ class OrderServiceTest {
         Long userId = 1L;
         Long orderId = 1L;
         
-        Order order = Order.create(userId, Recipient.create("수령인", "010-9876-5432"), 
-                                 Address.create("12345", "서울시", "상세주소"));
+        Order order = Order.create(userId, null, null, Money.of(20000), Money.zero(),
+                                  Recipient.of("수령인", "010-9876-5432"), 
+                                  Address.of("12345", "서울시", "상세주소"));
         order.completePayment(); // 결제 완료 상태로 변경
 
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));

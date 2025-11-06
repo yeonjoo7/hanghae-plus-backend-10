@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -265,5 +266,48 @@ public class InMemoryOrderItemRepository implements OrderItemRepository {
         return store.values().stream()
             .filter(item -> state.equals(item.getState()))
             .count();
+    }
+
+    @Override
+    public List<OrderItem> saveAll(List<OrderItem> orderItems) {
+        if (orderItems == null || orderItems.isEmpty()) {
+            return List.of();
+        }
+        
+        return orderItems.stream()
+            .map(this::save)
+            .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ProductSalesInfo> findTopSellingProducts(LocalDateTime startDate, LocalDateTime endDate, int limit) {
+        if (startDate == null || endDate == null || limit <= 0) {
+            return List.of();
+        }
+        
+        return store.values().stream()
+            .filter(item -> !item.getCreatedAt().isBefore(startDate) && 
+                           !item.getCreatedAt().isAfter(endDate))
+            .collect(Collectors.groupingBy(
+                OrderItem::getProductId,
+                Collectors.reducing(
+                    new ProductSalesInfo(null, 0L, 0L),
+                    item -> new ProductSalesInfo(
+                        item.getProductId(),
+                        (long) item.getQuantity().getValue(),
+                        (long) item.getTotalAmount().getAmount()
+                    ),
+                    (a, b) -> new ProductSalesInfo(
+                        a.getProductId() != null ? a.getProductId() : b.getProductId(),
+                        a.getTotalQuantity() + b.getTotalQuantity(),
+                        a.getTotalAmount() + b.getTotalAmount()
+                    )
+                )
+            ))
+            .entrySet().stream()
+            .map(Map.Entry::getValue)
+            .sorted((a, b) -> b.getTotalQuantity().compareTo(a.getTotalQuantity()))
+            .limit(limit)
+            .collect(Collectors.toList());
     }
 }
