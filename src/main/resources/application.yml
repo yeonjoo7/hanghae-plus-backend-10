@@ -1,0 +1,11 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: ecommerce-api
+
+logging:
+  level:
+    root: INFO
+    com.hanghae: DEBUG
