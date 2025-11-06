@@ -36,19 +36,22 @@ public class PaymentService {
     private final UserService userService;
     private final CouponService couponService;
     private final UserRepository userRepository;
+    private final PopularProductService popularProductService;
 
     public PaymentService(PaymentRepository paymentRepository,
                          OrderRepository orderRepository,
                          OrderItemRepository orderItemRepository,
                          UserService userService,
                          CouponService couponService,
-                         UserRepository userRepository) {
+                         UserRepository userRepository,
+                         PopularProductService popularProductService) {
         this.paymentRepository = paymentRepository;
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.userService = userService;
         this.couponService = couponService;
         this.userRepository = userRepository;
+        this.popularProductService = popularProductService;
     }
 
     /**
@@ -168,6 +171,9 @@ public class PaymentService {
             // 결제 완료 처리
             savedPayment.complete();
             paymentRepository.save(savedPayment);
+
+            // 인기 상품 집계를 위한 판매량 기록
+            recordSalesForPopularProducts(orderItems);
 
             return new PaymentResult(
                     savedPayment,
@@ -438,6 +444,36 @@ public class PaymentService {
 
         public Money getFinalAmount() {
             return payment != null ? payment.getPaidAmount() : Money.zero();
+        }
+    }
+
+    /**
+     * 인기 상품 집계를 위한 판매량 기록
+     * 
+     * @param orderItems 주문 아이템 목록
+     */
+    private void recordSalesForPopularProducts(List<OrderItem> orderItems) {
+        if (orderItems == null || orderItems.isEmpty()) {
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        java.time.LocalDate saleDate = now.toLocalDate();
+
+        // 각 주문 아이템의 판매량을 인기 상품 서비스에 기록
+        for (OrderItem orderItem : orderItems) {
+            try {
+                popularProductService.recordSale(
+                    orderItem.getProductId(),
+                    orderItem.getQuantity().getValue(),
+                    saleDate
+                );
+            } catch (Exception e) {
+                // 판매량 기록 실패는 주문 처리에 영향을 주지 않도록 로그만 기록
+                System.err.println("판매량 기록 실패 - ProductID: " + orderItem.getProductId() + 
+                                 ", Quantity: " + orderItem.getQuantity().getValue() + 
+                                 ", Error: " + e.getMessage());
+            }
         }
     }
 

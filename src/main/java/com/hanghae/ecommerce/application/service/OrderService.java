@@ -37,19 +37,22 @@ public class OrderService {
     private final StockService stockService;
     private final UserRepository userRepository;
     private final CartRepository cartRepository;
+    private final PopularProductService popularProductService;
 
     public OrderService(OrderRepository orderRepository,
                        OrderItemRepository orderItemRepository,
                        CartService cartService,
                        StockService stockService,
                        UserRepository userRepository,
-                       CartRepository cartRepository) {
+                       CartRepository cartRepository,
+                       PopularProductService popularProductService) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.cartService = cartService;
         this.stockService = stockService;
         this.userRepository = userRepository;
         this.cartRepository = cartRepository;
+        this.popularProductService = popularProductService;
     }
 
     /**
