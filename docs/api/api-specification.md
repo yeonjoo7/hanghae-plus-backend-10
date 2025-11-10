@@ -510,7 +510,7 @@ GET /orders/{orderId}
     ],
     "payment": {
       "paymentId": 1,
-      "method": "BALANCE",
+      "method": "POINT",
       "originalAmount": 3000000,
       "discountAmount": 100000,
       "finalAmount": 2900000,
@@ -607,7 +607,7 @@ POST /orders/{orderId}/payment
 #### Request Body
 ```json
 {
-  "paymentMethod": "BALANCE",
+  "paymentMethod": "POINT",
   "couponIds": [10, 20]
 }
 ```
@@ -615,7 +615,7 @@ POST /orders/{orderId}/payment
 #### Request Fields
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| paymentMethod | String | Yes | 결제 수단 (BALANCE) |
+| paymentMethod | String | Yes | 결제 수단 (POINT) |
 | couponIds | Long[] | No | 사용할 쿠폰 ID 목록 |
 
 #### Response (200 OK)
@@ -626,7 +626,7 @@ POST /orders/{orderId}/payment
     "paymentId": 1,
     "orderId": 1001,
     "orderNumber": "ORD-20251031-1001",
-    "paymentMethod": "BALANCE",
+    "paymentMethod": "POINT",
     "originalAmount": 3000000,
     "discountAmount": 300000,
     "finalAmount": 2700000,
@@ -1481,7 +1481,7 @@ GET /admin/products/statistics/popular
 
 | Method | Description |
 |--------|-------------|
-| BALANCE | 잔액 결제 |
+| POINT | 포인트 결제 |
 
 ### F. 재고 조정 유형 (Stock Adjustment Type)
 

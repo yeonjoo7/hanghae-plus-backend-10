@@ -1,0 +1,326 @@
+// E-Commerce Database Schema
+// 이커머스 시스템 데이터 모델
+// 설계 원칙: Soft Delete, No FK Constraints, Audit Trail
+// DBMS: MySQL 8.0+
+
+Project ecommerce {
+  database_type: 'MySQL'
+  Note: '''
+    # 이커머스 시스템 데이터베이스
+    - Soft Delete: state = 'DELETED'로 처리
+    - FK 제약조건: 물리적 FK 없음 (애플리케이션 레벨 관리)
+    - 모든 관계는 논리적 참조
+  '''
+}
+
+// ============================================
+// User Domain
+// ============================================
+
+Table user {
+  id bigint [pk, increment, note: '사용자 ID']
+  email varchar(255) [not null, unique, note: '이메일 (로그인 ID)']
+  state varchar(20) [not null, default: 'NORMAL', note: 'NORMAL, INACTIVE, DELETED']
+  type varchar(20) [not null, default: 'CUSTOMER', note: 'CUSTOMER, ADMIN']
+  name varchar(100) [not null, note: '사용자 이름']
+  phone varchar(20) [note: '연락처']
+  available_point int [not null, default: 0, note: '사용 가능 잔액 (원)']
+  used_point int [not null, default: 0, note: '사용한 포인트']
+  created_at datetime [not null, default: `CURRENT_TIMESTAMP`, note: '생성일시']
+  updated_at datetime [not null, default: `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`, note: '수정일시']
+
+  indexes {
+    state [name: 'idx_user_state']
+    type [name: 'idx_user_type']
+    email [unique, name: 'uk_user_email']
+  }
+
+  Note: '''
+    사용자 계정 및 포인트 정보
+    - 잔액 충전/사용 시 available_point 증감
+    - 총 포인트 = available_point + used_point
+  '''
+}
+
+// ============================================
+// Product Domain
+// ============================================
+
+Table product {
+  id bigint [pk, increment, note: '상품 ID']
+  state varchar(20) [not null, default: 'NORMAL', note: 'NORMAL, OUT_OF_STOCK, DISCONTINUED, DELETED']
+  name varchar(200) [not null, note: '상품명']
+  description text [note: '상품 설명']
+  price int [not null, note: '기본 가격 (원)']
+  limited_quantity int [note: '제한 수량 (1인당 구매 제한)']
+  created_at datetime [not null, default: `CURRENT_TIMESTAMP`, note: '생성일시']
+  updated_at datetime [not null, default: `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`, note: '수정일시']
+
+  indexes {
+    state [name: 'idx_product_state']
+    (state, price) [name: 'idx_product_state_price']
+  }
+
+  Note: '상품 기본 정보'
+}
+
+Table product_option {
+  id bigint [pk, increment, note: '상품 옵션 ID']
+  product_id bigint [not null, ref: > product.id, note: '상품 ID']
+  state varchar(20) [not null, default: 'NORMAL', note: 'NORMAL, DISCONTINUED, DELETED']
+  price int [not null, note: '옵션 가격 (원)']
+  created_at datetime [not null, default: `CURRENT_TIMESTAMP`, note: '생성일시']
+  updated_at datetime [not null, default: `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`, note: '수정일시']
+
+  indexes {
+    product_id [name: 'idx_product_option_product']
+    state [name: 'idx_product_option_state']
+  }
+
+  Note: '상품의 세부 옵션 정보'
+}
+
+Table stock {
+  id bigint [pk, increment, note: '재고 ID']
+  product_id bigint [not null, ref: > product.id, note: '상품 ID']
+  product_option_id bigint [ref: > product_option.id, note: '상품 옵션 ID']
+  available_quantity int [not null, default: 0, note: '사용 가능 재고']
+  sold_quantity int [not null, default: 0, note: '판매된 수량']
+  memo varchar(500) [note: '메모']
+  created_at datetime [not null, default: `CURRENT_TIMESTAMP`, note: '생성일시']
+  updated_at datetime [not null, default: `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`, note: '수정일시']
+
+  indexes {
+    (product_id, product_option_id) [unique, name: 'uk_stock_product_option']
+  }
+
+  Note: '''
+    상품 및 옵션별 재고 관리
+    - 총 재고 = available_quantity + sold_quantity
+    - 주문 시: available_quantity 감소, sold_quantity 증가
+    - 복합 유니크 인덱스가 product_id 조회에도 사용됨 (leftmost prefix)
+  '''
+}
+
+Table popular_product {
+  id bigint [pk, increment, note: '인기 상품 ID']
+  product_id bigint [not null, ref: > product.id, note: '상품 ID']
+  rank int [not null, note: '순위 (1-5)']
+  sales_count int [not null, note: '판매 수량']
+  sales_amount bigint [not null, note: '판매 금액']
+  period_start date [not null, note: '집계 시작일']
+  period_end date [not null, note: '집계 종료일']
+  created_at datetime [not null, default: `CURRENT_TIMESTAMP`, note: '생성일시']
+  updated_at datetime [not null, default: `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`, note: '수정일시']
+
+  indexes {
+    product_id [name: 'idx_popular_product']
+    rank [name: 'idx_popular_rank']
+    (period_start, period_end) [name: 'idx_popular_period']
+  }
+
+  Note: '''
+    인기 상품 통계
+    - 최근 3일간 판매 데이터 기반 집계
+    - 상위 5개 상품만 저장
+  '''
+}
+
+// ============================================
+// Coupon Domain
+// ============================================
+
+Table coupon {
+  id bigint [pk, increment, note: '쿠폰 ID']
+  name varchar(200) [not null, note: '쿠폰명']
+  state varchar(20) [not null, default: 'NORMAL', note: 'NORMAL, EXPIRED, DISCONTINUED, DELETED']
+  discount_rate int [note: '할인율 (%)']
+  discount_price int [note: '할인 금액 (원)']
+  total_quantity int [not null, note: '총 발급 가능 수량']
+  issued_quantity int [not null, default: 0, note: '발급된 수량']
+  begin_date datetime [not null, note: '사용 시작일시']
+  end_date datetime [not null, note: '사용 종료일시']
+  created_at datetime [not null, default: `CURRENT_TIMESTAMP`, note: '생성일시']
+  updated_at datetime [not null, default: `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`, note: '수정일시']
+
+  indexes {
+    state [name: 'idx_coupon_state']
+    (begin_date, end_date) [name: 'idx_coupon_date']
+  }
+
+  Note: '''
+    쿠폰 템플릿
+    - 장바구니 전체에 할인 적용
+    - discount_rate와 discount_price 중 하나만 값 가짐
+  '''
+}
+
+Table user_coupon {
+  id bigint [pk, increment, note: '사용자 쿠폰 ID']
+  user_id bigint [not null, ref: > user.id, note: '사용자 ID']
+  coupon_id bigint [not null, ref: > coupon.id, note: '쿠폰 ID']
+  state varchar(20) [not null, default: 'AVAILABLE', note: 'AVAILABLE, USED, EXPIRED, DELETED']
+  issued_at datetime [not null, default: `CURRENT_TIMESTAMP`, note: '발급일시']
+  used_at datetime [note: '사용일시']
+  expires_at datetime [not null, note: '만료일시']
+  created_at datetime [not null, default: `CURRENT_TIMESTAMP`, note: '생성일시']
+  updated_at datetime [not null, default: `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`, note: '수정일시']
+
+  indexes {
+    user_id [name: 'idx_user_coupon_user']
+    coupon_id [name: 'idx_user_coupon_coupon']
+    (user_id, state) [name: 'idx_user_coupon_user_state']
+    expires_at [name: 'idx_user_coupon_expires']
+  }
+
+  Note: '사용자가 발급받은 쿠폰'
+}
+
+// ============================================
+// Cart Domain
+// ============================================
+
+Table cart {
+  id bigint [pk, increment, note: '장바구니 ID']
+  user_id bigint [not null, ref: > user.id, note: '사용자 ID']
+  user_coupon_id bigint [ref: > user_coupon.id, note: '적용된 사용자 쿠폰 ID']
+  state varchar(20) [not null, default: 'NORMAL', note: 'NORMAL, ORDERED, DELETED']
+  created_at datetime [not null, default: `CURRENT_TIMESTAMP`, note: '생성일시']
+  updated_at datetime [not null, default: `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`, note: '수정일시']
+
+  indexes {
+    user_id [name: 'idx_cart_user']
+    (user_id, state) [name: 'idx_cart_user_state']
+  }
+
+  Note: '사용자별 장바구니'
+}
+
+Table cart_item {
+  id bigint [pk, increment, note: '장바구니 아이템 ID']
+  cart_id bigint [not null, ref: > cart.id, note: '장바구니 ID']
+  product_id bigint [not null, ref: > product.id, note: '상품 ID']
+  product_option_id bigint [ref: > product_option.id, note: '상품 옵션 ID']
+  state varchar(20) [not null, default: 'NORMAL', note: 'NORMAL, DELETED']
+  quantity int [not null, note: '수량']
+  created_at datetime [not null, default: `CURRENT_TIMESTAMP`, note: '생성일시']
+  updated_at datetime [not null, default: `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`, note: '수정일시']
+
+  indexes {
+    cart_id [name: 'idx_cart_item_cart']
+    product_id [name: 'idx_cart_item_product']
+    (cart_id, state) [name: 'idx_cart_item_cart_state']
+  }
+
+  Note: '장바구니에 담긴 상품들'
+}
+
+// ============================================
+// Order Domain
+// ============================================
+
+Table order {
+  id bigint [pk, increment, note: '주문 ID']
+  user_id bigint [not null, ref: > user.id, note: '사용자 ID']
+  user_coupon_id bigint [ref: > user_coupon.id, note: '적용된 사용자 쿠폰 ID']
+  cart_id bigint [ref: > cart.id, note: '장바구니 ID']
+  order_number varchar(50) [not null, unique, note: '주문 번호']
+  state varchar(20) [not null, default: 'PENDING_PAYMENT', note: 'PENDING_PAYMENT, COMPLETED, CANCELLED, REFUNDED, DELETED']
+  amount int [not null, note: '총 상품 금액 (원)']
+  discount_amount int [not null, default: 0, note: '총 할인 금액 (원)']
+  total_amount int [not null, note: '최종 결제 금액 (원)']
+  recipient_name varchar(100) [not null, note: '수령인 이름']
+  recipient_phone varchar(20) [not null, note: '수령인 연락처']
+  zip_code varchar(10) [not null, note: '우편번호']
+  address varchar(500) [not null, note: '주소']
+  detail_address varchar(500) [note: '상세 주소']
+  created_at datetime [not null, default: `CURRENT_TIMESTAMP`, note: '생성일시']
+  updated_at datetime [not null, default: `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`, note: '수정일시']
+
+  indexes {
+    order_number [unique, name: 'uk_order_number']
+    user_id [name: 'idx_order_user']
+    state [name: 'idx_order_state']
+    (user_id, created_at) [name: 'idx_order_user_created']
+  }
+
+  Note: '''
+    주문 정보
+    - total_amount = amount - discount_amount
+    - state는 API 명세와 일치: PENDING_PAYMENT(결제대기) → COMPLETED(완료)
+  '''
+}
+
+Table order_item {
+  id bigint [pk, increment, note: '주문 아이템 ID']
+  order_id bigint [not null, ref: > order.id, note: '주문 ID']
+  product_id bigint [not null, ref: > product.id, note: '상품 ID']
+  product_option_id bigint [ref: > product_option.id, note: '상품 옵션 ID']
+  state varchar(20) [not null, default: 'NORMAL', note: 'NORMAL, CANCELLED, DELETED']
+  price int [not null, note: '상품 단가 (원)']
+  quantity int [not null, note: '수량']
+  discount_amount int [not null, default: 0, note: '할인 금액 (원)']
+  total_amount int [not null, note: '총 금액 (원)']
+  created_at datetime [not null, default: `CURRENT_TIMESTAMP`, note: '생성일시']
+  updated_at datetime [not null, default: `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`, note: '수정일시']
+
+  indexes {
+    order_id [name: 'idx_order_item_order']
+    product_id [name: 'idx_order_item_product']
+  }
+
+  Note: '''
+    주문에 포함된 상품들
+    - total_amount = (price * quantity) - discount_amount
+  '''
+}
+
+// ============================================
+// Payment Domain
+// ============================================
+
+Table payment {
+  id bigint [pk, increment, note: '결제 ID']
+  order_id bigint [not null, ref: > order.id, note: '주문 ID']
+  state varchar(20) [not null, default: 'PENDING', note: 'PENDING, COMPLETED, FAILED, CANCELLED, REFUNDED, DELETED']
+  method varchar(20) [not null, note: 'POINT, CARD, BANK_TRANSFER']
+  paid_amount int [not null, note: '결제 금액 (원)']
+  expires_at datetime [note: '결제 만료일시']
+  created_at datetime [not null, default: `CURRENT_TIMESTAMP`, note: '생성일시']
+  updated_at datetime [not null, default: `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`, note: '수정일시']
+
+  indexes {
+    order_id [name: 'idx_payment_order']
+    state [name: 'idx_payment_state']
+  }
+
+  Note: '결제 정보'
+}
+
+Table balance_transaction {
+  id bigint [pk, increment, note: '거래 ID']
+  user_id bigint [not null, ref: > user.id, note: '사용자 ID']
+  order_id bigint [ref: > order.id, note: '주문 ID']
+  type varchar(20) [not null, note: 'CHARGE, PAYMENT, REFUND']
+  amount bigint [not null, note: '거래 금액 (양수/음수)']
+  balance_before bigint [not null, note: '거래 전 잔액']
+  balance_after bigint [not null, note: '거래 후 잔액']
+  description varchar(500) [note: '거래 설명']
+  created_at datetime [not null, default: `CURRENT_TIMESTAMP`, note: '생성일시']
+  updated_at datetime [not null, default: `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`, note: '수정일시']
+
+  indexes {
+    user_id [name: 'idx_balance_tx_user']
+    order_id [name: 'idx_balance_tx_order']
+    type [name: 'idx_balance_tx_type']
+    (user_id, created_at) [name: 'idx_balance_tx_user_created']
+  }
+
+  Note: '''
+    잔액 충전, 사용, 환불 내역
+    - CHARGE: 충전 (amount > 0)
+    - PAYMENT: 결제 사용 (amount < 0)
+    - REFUND: 환불 (amount > 0)
+  '''
+}
+
