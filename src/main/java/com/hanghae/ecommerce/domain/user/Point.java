@@ -65,7 +65,7 @@ public class Point {
      */
     public boolean isGreaterThanOrEqual(Point other) {
         if (other == null) {
-            return true;
+            throw new IllegalArgumentException("비교할 포인트는 null일 수 없습니다.");
         }
         return this.value >= other.value;
     }
@@ -75,7 +75,7 @@ public class Point {
      */
     public boolean isGreaterThan(Point other) {
         if (other == null) {
-            return true;
+            throw new IllegalArgumentException("비교할 포인트는 null일 수 없습니다.");
         }
         return this.value > other.value;
     }

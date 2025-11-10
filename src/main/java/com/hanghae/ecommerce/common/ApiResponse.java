@@ -23,12 +23,12 @@ public class ApiResponse<T> {
 
     public static <T> ApiResponse<T> error(String code, String message) {
         ErrorResponse error = new ErrorResponse(code, message, null);
-        return new ApiResponse<>(false, null, null, error);
+        return new ApiResponse<>(false, null, message, error);
     }
 
     public static <T> ApiResponse<T> error(String code, String message, Object details) {
         ErrorResponse error = new ErrorResponse(code, message, details);
-        return new ApiResponse<>(false, null, null, error);
+        return new ApiResponse<>(false, null, message, error);
     }
 
     @Getter

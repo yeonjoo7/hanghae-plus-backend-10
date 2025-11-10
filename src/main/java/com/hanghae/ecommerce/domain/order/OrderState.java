@@ -66,7 +66,7 @@ public enum OrderState {
      * 취소 가능한 상태인지 확인
      */
     public boolean canBeCancelled() {
-        return this == PENDING_PAYMENT || this == COMPLETED;
+        return this == PENDING_PAYMENT;
     }
 
     /**

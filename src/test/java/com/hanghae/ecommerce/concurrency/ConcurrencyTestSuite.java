@@ -70,9 +70,12 @@ class ConcurrencyTestSuite {
     void setUp() {
         lockManager.clearAllLocks();
 
+        // 고유한 타임스탬프로 테스트 데이터 생성
+        long timestamp = System.currentTimeMillis();
+
         // 테스트 사용자 (충분한 포인트)
         testUser = User.create(
-            "test@example.com",
+            "test_" + timestamp + "@example.com",
             "테스트 사용자",
             "010-1234-5678"
         );
@@ -81,7 +84,7 @@ class ConcurrencyTestSuite {
 
         // 테스트 상품
         testProduct = Product.create(
-            "인기 상품",
+            "인기 상품 " + timestamp,
             "동시성 테스트용 인기 상품",
             Money.of(1000),
             Quantity.of(5)
@@ -94,7 +97,7 @@ class ConcurrencyTestSuite {
 
         // 테스트 쿠폰
         testCoupon = Coupon.create(
-            "동시성 테스트 쿠폰",
+            "동시성 테스트 쿠폰 " + timestamp,
             DiscountPolicy.rate(10),
             Quantity.of(50),
             LocalDateTime.now(),
@@ -111,13 +114,15 @@ class ConcurrencyTestSuite {
         int limitedCoupons = 5; // 쿠폰 5개
         int concurrentUsers = 50; // 50명 동시 구매 시도
 
-        // 한정 재고 설정
+        // 기존 재고 삭제 후 한정 재고 설정
+        stockRepository.deleteByProductId(testProduct.getId());
         Stock limitedStockItem = Stock.createForProduct(testProduct.getId(), Quantity.of(limitedStock), null);
         stockRepository.save(limitedStockItem);
 
-        // 한정 쿠폰 설정
+        // 한정 쿠폰 설정 (고유한 이름)
+        long timestamp = System.currentTimeMillis();
         Coupon limitedCoupon = Coupon.create(
-            "한정 쿠폰",
+            "한정 쿠폰 " + timestamp,
             DiscountPolicy.amount(Money.of(500)),
             Quantity.of(limitedCoupons),
             LocalDateTime.now(),
@@ -129,7 +134,7 @@ class ConcurrencyTestSuite {
         List<User> users = new ArrayList<>();
         for (int i = 1; i <= concurrentUsers; i++) {
             User user = User.create(
-                "user" + i + "@test.com",
+                "user" + timestamp + "_" + i + "@test.com",
                 "사용자" + i,
                 "010-0000-" + String.format("%04d", i)
             );
@@ -206,7 +211,7 @@ class ConcurrencyTestSuite {
         assertThat(finalStock.getAvailableQuantity().getValue()).isZero();
 
         // 최종 쿠폰 수량 확인
-        Coupon finalCoupon = couponRepository.findById(limitedCoupon.getId()).orElseThrow();
+        Coupon finalCoupon = couponRepository.findById(finalLimitedCoupon.getId()).orElseThrow();
         assertThat(finalCoupon.getIssuedQuantity().getValue()).isEqualTo(limitedCoupons);
         assertThat(finalCoupon.getRemainingQuantity().getValue()).isZero();
 
@@ -225,21 +230,22 @@ class ConcurrencyTestSuite {
         int concurrentUsers = 1000;
         int maxQuantityPerUser = 2;
 
-        // 플래시 세일 상품 설정
+        // 플래시 세일 상품 설정 (고유한 이름)
+        long timestamp = System.currentTimeMillis();
         Product flashSaleProduct = Product.create(
-            "플래시 세일 상품",
+            "플래시 세일 상품 " + timestamp,
             "한정 시간 특가 상품",
             Money.of(500),
             Quantity.of(maxQuantityPerUser)
         );
         final Product finalFlashSaleProduct = productRepository.save(flashSaleProduct);
 
-        Stock flashSaleStockItem = Stock.createForProduct(flashSaleProduct.getId(), Quantity.of(flashSaleStock), null);
+        Stock flashSaleStockItem = Stock.createForProduct(finalFlashSaleProduct.getId(), Quantity.of(flashSaleStock), null);
         stockRepository.save(flashSaleStockItem);
 
-        // 플래시 세일 쿠폰
+        // 플래시 세일 쿠폰 (고유한 이름)
         Coupon flashSaleCoupon = Coupon.create(
-            "플래시 세일 30% 할인",
+            "플래시 세일 30% 할인 " + timestamp,
             DiscountPolicy.rate(30),
             Quantity.of(200),
             LocalDateTime.now(),
@@ -251,9 +257,9 @@ class ConcurrencyTestSuite {
         List<User> users = new ArrayList<>();
         for (int i = 1; i <= concurrentUsers; i++) {
             User user = User.create(
-                "flashuser" + i + "@test.com",
+                "flashuser" + timestamp + "_" + i + "@test.com",
                 "플래시사용자" + i,
-                "010-1111-" + String.format("%04d", i)
+                "010-1111-" + String.format("%04d", i % 10000)
             );
             user.chargePoint(Point.of(50000));
             users.add(userRepository.save(user));
@@ -326,7 +332,7 @@ class ConcurrencyTestSuite {
         double throughput = (double) concurrentUsers / duration * 1000;
 
         // 재고가 정확히 소진되었는지 확인
-        Stock finalStock = stockRepository.findByProductIdAndProductOptionIdIsNull(flashSaleProduct.getId())
+        Stock finalStock = stockRepository.findByProductIdAndProductOptionIdIsNull(finalFlashSaleProduct.getId())
                 .orElseThrow();
         assertThat(totalQuantityPurchased.get()).isEqualTo(flashSaleStock);
         assertThat(finalStock.getAvailableQuantity().getValue()).isZero();

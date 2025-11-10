@@ -53,9 +53,9 @@ class StockConcurrencyTest {
         // 락 매니저 정리
         lockManager.clearAllLocks();
 
-        // 테스트 상품 생성
+        // 테스트 상품 생성 (매번 새로운 상품 생성)
         testProduct = Product.create(
-            "테스트 상품",
+            "테스트 상품 " + System.currentTimeMillis(),
             "동시성 테스트용 상품",
             com.hanghae.ecommerce.domain.product.Money.of(10000),
             Quantity.of(10) // 1인당 최대 10개까지 구매 가능
@@ -138,7 +138,8 @@ class StockConcurrencyTest {
         int concurrentUsers = 200;
         int quantityPerUser = 1;
 
-        // 재고를 100개로 설정
+        // 기존 재고 삭제 후 재고를 100개로 설정
+        stockRepository.deleteByProductId(testProduct.getId());
         Stock limitedStock = Stock.createForProduct(testProduct.getId(), Quantity.of(initialStock), null);
         stockRepository.save(limitedStock);
 
@@ -194,7 +195,8 @@ class StockConcurrencyTest {
         int concurrentUsers = 500;
         int quantityPerUser = 20; // 각 사용자가 20개씩 구매
 
-        // 대량 재고 설정
+        // 기존 재고 삭제 후 대량 재고 설정
+        stockRepository.deleteByProductId(testProduct.getId());
         Stock highVolumeStock = Stock.createForProduct(testProduct.getId(), Quantity.of(initialStock), null);
         stockRepository.save(highVolumeStock);
 
@@ -258,6 +260,8 @@ class StockConcurrencyTest {
         int initialStock = 500;
         int operations = 200; // 차감 100번, 복원 100번
 
+        // 기존 재고 삭제 후 새 재고 설정
+        stockRepository.deleteByProductId(testProduct.getId());
         Stock testStock = Stock.createForProduct(testProduct.getId(), Quantity.of(initialStock), null);
         stockRepository.save(testStock);
 
@@ -328,10 +332,11 @@ class StockConcurrencyTest {
         List<Product> products = new ArrayList<>();
         List<Stock> stocks = new ArrayList<>();
 
-        // 5개 상품 생성
+        // 5개 상품 생성 (고유한 이름)
+        long timestamp = System.currentTimeMillis();
         for (int i = 1; i <= 5; i++) {
             Product product = Product.create(
-                "상품" + i,
+                "상품" + timestamp + "_" + i,
                 "테스트 상품" + i,
                 com.hanghae.ecommerce.domain.product.Money.of(1000 * i),
                 Quantity.of(5)
@@ -392,6 +397,8 @@ class StockConcurrencyTest {
         int operations = 1000;
         int threadPoolSize = 100;
 
+        // 기존 재고 삭제 후 새 재고 설정
+        stockRepository.deleteByProductId(testProduct.getId());
         Stock performanceStock = Stock.createForProduct(testProduct.getId(), Quantity.of(operations), null);
         stockRepository.save(performanceStock);
 

@@ -190,12 +190,8 @@ public class OrderItem {
      */
     private static Money calculateTotalAmount(Money price, Quantity quantity, Money discountAmount) {
         Money subtotal = price.multiply(quantity.getValue());
-        Money result = subtotal.add(discountAmount.multiply(-1));
-        
-        if (result.getAmount() < 0) {
-            throw new IllegalArgumentException("주문 아이템의 총 금액은 0 이상이어야 합니다.");
-        }
-        
+        Money result = subtotal.subtract(discountAmount);
+
         return result;
     }
 
