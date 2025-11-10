@@ -51,10 +51,7 @@ public class Order {
         validateRecipient(recipient);
         validateAddress(address);
 
-        Money totalAmount = amount.add(discountAmount.multiply(-1));
-        if (totalAmount.getAmount() < 0) {
-            throw new IllegalArgumentException("최종 결제 금액은 0 이상이어야 합니다.");
-        }
+        Money totalAmount = amount.subtract(discountAmount);
 
         LocalDateTime now = LocalDateTime.now();
         return new Order(
@@ -173,11 +170,7 @@ public class Order {
         validateDiscountAmount(discountAmount);
 
         this.discountAmount = discountAmount;
-        this.totalAmount = this.amount.add(discountAmount.multiply(-1));
-        
-        if (this.totalAmount.getAmount() < 0) {
-            throw new IllegalArgumentException("최종 결제 금액은 0 이상이어야 합니다.");
-        }
+        this.totalAmount = this.amount.subtract(discountAmount);
 
         this.updatedAt = LocalDateTime.now();
     }

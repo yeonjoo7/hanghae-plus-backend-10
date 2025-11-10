@@ -1,6 +1,7 @@
 package com.hanghae.ecommerce.presentation.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hanghae.ecommerce.EcommerceApiApplication;
 import com.hanghae.ecommerce.application.service.ProductService;
 import com.hanghae.ecommerce.domain.product.Money;
 import com.hanghae.ecommerce.domain.product.Product;
@@ -12,6 +13,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -23,6 +25,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(controllers = ProductController.class)
+@ContextConfiguration(classes = EcommerceApiApplication.class)
 class ProductControllerTest {
 
     @Autowired

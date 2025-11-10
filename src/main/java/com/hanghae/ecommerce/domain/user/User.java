@@ -149,6 +149,9 @@ public class User {
         if (amount.isZero()) {
             throw new IllegalArgumentException("환불할 포인트는 0보다 커야 합니다.");
         }
+        if (!isActive()) {
+            throw new IllegalStateException("활성 상태가 아닌 사용자는 포인트를 환불받을 수 없습니다.");
+        }
         if (!usedPoint.isGreaterThanOrEqual(amount)) {
             throw new IllegalArgumentException("환불할 포인트가 사용된 포인트보다 클 수 없습니다.");
         }

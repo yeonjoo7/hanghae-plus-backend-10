@@ -10,7 +10,6 @@ import com.hanghae.ecommerce.presentation.dto.PopularProductResponse;
 import com.hanghae.ecommerce.presentation.dto.ProductDetailResponse;
 import com.hanghae.ecommerce.presentation.dto.ProductListResponse;
 import com.hanghae.ecommerce.presentation.dto.ProductSummaryResponse;
-import com.hanghae.ecommerce.presentation.exception.ProductNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -42,12 +41,16 @@ public class ProductController {
             ProductWithStock productWithStock = productService.getProductWithStock(productId);
             Product product = productWithStock.getProduct();
             
+            Integer availableQuantity = productWithStock.getStock() != null
+                ? productWithStock.getStock().getAvailableQuantity().getValue()
+                : null;
+
             ProductDetailResponse response = new ProductDetailResponse(
                 product.getId(),
                 product.getName(),
                 product.getDescription(),
                 product.getPrice().getValue(),
-                productWithStock.getStock().getAvailableQuantity().getValue(),
+                availableQuantity,
                 product.hasLimitedQuantity() ? product.getLimitedQuantity().getValue() : null,
                 mapProductStatus(product.getState()),
                 product.getCreatedAt(),
@@ -56,7 +59,7 @@ public class ProductController {
             
             return ApiResponse.success(response);
         } catch (IllegalArgumentException e) {
-            throw new ProductNotFoundException(productId);
+            throw e;
         }
     }
 
@@ -75,12 +78,16 @@ public class ProductController {
                 .map(productId -> {
                     ProductWithStock productWithStock = productsWithStock.get(productId);
                     Product product = productWithStock.getProduct();
-                    
+
+                    Integer availableQuantity = productWithStock.getStock() != null
+                        ? productWithStock.getStock().getAvailableQuantity().getValue()
+                        : null;
+
                     return new ProductSummaryResponse(
                         product.getId(),
                         product.getName(),
                         product.getPrice().getValue(),
-                        productWithStock.getStock().getAvailableQuantity().getValue(),
+                        availableQuantity,
                         mapProductStatus(product.getState())
                     );
                 })
@@ -100,18 +107,22 @@ public class ProductController {
         
         List<PopularProductResponse.PopularProductItem> products = popularProducts.stream()
                 .map(popularProduct -> {
-                    PopularProductResponse.SalesPeriod salesPeriod = 
+                    PopularProductResponse.SalesPeriod salesPeriod =
                         new PopularProductResponse.SalesPeriod(
                             popularProduct.getStartDate(),
                             popularProduct.getEndDate()
                         );
-                    
+
+                    Integer availableQuantity = popularProduct.getStock() != null
+                        ? popularProduct.getStock().getAvailableQuantity().getValue()
+                        : null;
+
                     return new PopularProductResponse.PopularProductItem(
                         popularProduct.getRank(),
                         popularProduct.getProduct().getId(),
                         popularProduct.getProduct().getName(),
                         popularProduct.getProduct().getPrice().getValue(),
-                        popularProduct.getStock().getAvailableQuantity().getValue(),
+                        availableQuantity,
                         popularProduct.getSalesCount(),
                         salesPeriod
                     );

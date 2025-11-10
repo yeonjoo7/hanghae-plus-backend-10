@@ -47,13 +47,34 @@ public class Money {
     }
 
     /**
+     * 금액 빼기
+     */
+    public Money subtract(Money other) {
+        if (other == null) {
+            throw new IllegalArgumentException("뺄 금액은 null일 수 없습니다.");
+        }
+        int result = this.amount - other.amount;
+        if (result < 0) {
+            throw new IllegalArgumentException("빼기 결과는 0 이상이어야 합니다.");
+        }
+        return new Money(result);
+    }
+
+    /**
      * 금액 곱셈
      */
     public Money multiply(int multiplier) {
         if (multiplier < 0) {
             throw new IllegalArgumentException("곱셈 인수는 0 이상이어야 합니다: " + multiplier);
         }
-        return new Money(this.amount * multiplier);
+
+        // 오버플로우 검증
+        long result = (long) this.amount * multiplier;
+        if (result > Integer.MAX_VALUE) {
+            throw new ArithmeticException("곱셈 결과가 최대값을 초과합니다: " + result);
+        }
+
+        return new Money((int) result);
     }
 
     /**
@@ -61,7 +82,7 @@ public class Money {
      */
     public boolean isGreaterThanOrEqual(Money other) {
         if (other == null) {
-            return true;
+            throw new IllegalArgumentException("비교할 금액은 null일 수 없습니다.");
         }
         return this.amount >= other.amount;
     }

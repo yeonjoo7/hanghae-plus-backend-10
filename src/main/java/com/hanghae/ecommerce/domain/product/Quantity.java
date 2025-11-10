@@ -65,7 +65,7 @@ public class Quantity {
      */
     public boolean isGreaterThanOrEqual(Quantity other) {
         if (other == null) {
-            return true;
+            throw new IllegalArgumentException("비교할 수량은 null일 수 없습니다.");
         }
         return this.value >= other.value;
     }
@@ -75,7 +75,7 @@ public class Quantity {
      */
     public boolean isGreaterThan(Quantity other) {
         if (other == null) {
-            return true;
+            throw new IllegalArgumentException("비교할 수량은 null일 수 없습니다.");
         }
         return this.value > other.value;
     }
