@@ -1,0 +1,26 @@
+spring:
+  datasource:
+    # Testcontainers가 동적으로 설정할 URL을 사용
+    # 실제 값은 @DynamicPropertySource에서 설정됨
+    url: ${TESTCONTAINERS_MYSQL_URL:jdbc:mysql://localhost:3306/test}
+    username: ${TESTCONTAINERS_MYSQL_USERNAME:test}
+    password: ${TESTCONTAINERS_MYSQL_PASSWORD:test}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+    open-in-view: false
+
+logging:
+  level:
+    root: INFO
+    com.hanghae: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.testcontainers: INFO
+
