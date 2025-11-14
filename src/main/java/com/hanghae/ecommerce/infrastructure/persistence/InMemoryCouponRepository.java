@@ -18,6 +18,11 @@ import java.util.stream.Collectors;
 @Repository
 public class InMemoryCouponRepository implements CouponRepository {
     
+    @Override
+    public Optional<Coupon> findById(String id) {
+        return findById(Long.valueOf(id));
+    }
+    
     private final ConcurrentHashMap<Long, Coupon> store = new ConcurrentHashMap<>();
     private final AtomicLong idGenerator = new AtomicLong(1);
     
@@ -186,6 +191,13 @@ public class InMemoryCouponRepository implements CouponRepository {
         return store.values().stream()
             .filter(coupon -> state.equals(coupon.getState()))
             .count();
+    }
+    
+    @Override
+    public List<Coupon> findAvailableCoupons(LocalDateTime now) {
+        return findValidCoupons(now).stream()
+                .filter(Coupon::hasRemainingQuantity)
+                .collect(Collectors.toList());
     }
     
     @Override

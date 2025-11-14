@@ -25,7 +25,9 @@ public interface CouponRepository {
      * 쿠폰명으로 쿠폰 목록 조회 (부분 일치)
      */
     List<Coupon> findByNameContaining(String name);
-    
+
+    List<Coupon> findAvailableCoupons(LocalDateTime now);
+
     /**
      * 상태별 쿠폰 목록 조회
      */
@@ -50,7 +52,9 @@ public interface CouponRepository {
      * 잔여 수량이 있는 쿠폰 목록 조회
      */
     List<Coupon> findCouponsWithRemainingQuantity();
-    
+
+    Optional<Coupon> findById(String id);
+
     /**
      * 모든 쿠폰 조회
      */

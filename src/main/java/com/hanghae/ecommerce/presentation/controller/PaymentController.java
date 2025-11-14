@@ -1,8 +1,8 @@
 package com.hanghae.ecommerce.presentation.controller;
 
 import com.hanghae.ecommerce.application.service.PaymentService;
-import com.hanghae.ecommerce.application.service.PaymentService.PaymentResult;
-import com.hanghae.ecommerce.application.service.CouponService.UserCouponInfo;
+import com.hanghae.ecommerce.presentation.dto.PaymentResultDto;
+import com.hanghae.ecommerce.presentation.dto.UserCouponDto;
 import com.hanghae.ecommerce.common.ApiResponse;
 import com.hanghae.ecommerce.domain.payment.PaymentMethod;
 import com.hanghae.ecommerce.presentation.dto.PaymentRequest;
@@ -39,7 +39,7 @@ public class PaymentController {
         try {
             PaymentMethod paymentMethod = parsePaymentMethod(request.getPaymentMethod());
             
-            PaymentResult paymentResult = paymentService.processPayment(
+            PaymentResultDto paymentResult = paymentService.processPayment(
                 CURRENT_USER_ID,
                 orderId,
                 paymentMethod,
@@ -72,7 +72,7 @@ public class PaymentController {
     /**
      * PaymentResult를 PaymentResponse로 변환
      */
-    private PaymentResponse toPaymentResponse(PaymentResult paymentResult) {
+    private PaymentResponse toPaymentResponse(PaymentResultDto paymentResult) {
         List<PaymentResponse.AppliedCouponResponse> appliedCoupons = 
             paymentResult.getAppliedCoupons().stream()
                 .map(this::toAppliedCouponResponse)
@@ -102,7 +102,7 @@ public class PaymentController {
     /**
      * UserCouponInfo를 AppliedCouponResponse로 변환
      */
-    private PaymentResponse.AppliedCouponResponse toAppliedCouponResponse(UserCouponInfo couponInfo) {
+    private PaymentResponse.AppliedCouponResponse toAppliedCouponResponse(UserCouponDto couponInfo) {
         // 쿠폰 타입에 따른 적용 상품 ID 설정
         Long appliedProductId = null;
         if ("CART_ITEM".equals(couponInfo.getCoupon().getDiscountPolicy().getType().name())) {
@@ -127,7 +127,7 @@ public class PaymentController {
     /**
      * 할인 금액 계산 (단순화된 버전)
      */
-    private int calculateDiscountAmount(UserCouponInfo couponInfo) {
+    private int calculateDiscountAmount(UserCouponDto couponInfo) {
         // 실제로는 주문 금액과 쿠폰 정책을 기반으로 계산해야 함
         // 여기서는 단순화된 버전으로 구현
         int discountValue = couponInfo.getCoupon().getDiscountPolicy().getDiscountValue();
