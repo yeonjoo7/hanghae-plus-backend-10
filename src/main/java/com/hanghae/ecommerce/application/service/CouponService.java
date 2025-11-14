@@ -7,17 +7,17 @@ import java.util.List;
 
 public interface CouponService {
     
-    UserCoupon issueCoupon(String couponId, String userId);
+    UserCoupon issueCoupon(Long couponId, Long userId);
     
     Coupon getCoupon(String couponId);
     
     List<Coupon> getAvailableCoupons();
     
-    List<UserCoupon> getUserCoupons(String userId);
+    List<UserCoupon> getUserCoupons(Long userId);
     
     List<UserCoupon> getAvailableUserCoupons(String userId);
     
-    void useCoupon(String userCouponId, String userId);
+    void useCoupon(Long userCouponId, Long userId);
     
     boolean validateCoupon(String couponId, String userId, double orderAmount);
 }

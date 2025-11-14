@@ -13,19 +13,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 @Service
 public class CouponServiceImpl implements CouponService {
-    
-    @Override
-    public void useCoupon(String userId, String couponId) {
-        // TODO: 구현 필요
-        throw new UnsupportedOperationException("아직 구현되지 않았습니다");
-    }
     
     @Override
     public List<UserCoupon> getAvailableUserCoupons(String userId) {
@@ -47,7 +40,7 @@ public class CouponServiceImpl implements CouponService {
 
     @Override
     @Transactional
-    public UserCoupon issueCoupon(String couponId, String userId) {
+    public UserCoupon issueCoupon(Long couponId, Long userId) {
         // 1. 쿠폰 정보 조회 및 락
         List<Map<String, Object>> coupons = jdbcTemplate.queryForList(
                 """
@@ -109,7 +102,7 @@ public class CouponServiceImpl implements CouponService {
     }
 
     @Override
-    public List<UserCoupon> getUserCoupons(String userId) {
+    public List<UserCoupon> getUserCoupons(Long userId) {
         return userCouponRepository.findByUserId(Long.valueOf(userId));
     }
 
