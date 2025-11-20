@@ -5,6 +5,7 @@ import com.hanghae.ecommerce.presentation.dto.UserCouponDto;
 import com.hanghae.ecommerce.common.ApiResponse;
 import com.hanghae.ecommerce.presentation.dto.CouponUsageHistoryResponse;
 import com.hanghae.ecommerce.domain.coupon.UserCoupon;
+import com.hanghae.ecommerce.domain.coupon.UserCouponInfo;
 import com.hanghae.ecommerce.domain.coupon.UserCouponState;
 import com.hanghae.ecommerce.presentation.dto.IssueCouponResponse;
 import com.hanghae.ecommerce.presentation.dto.MyCouponResponse;
@@ -147,7 +148,7 @@ public class CouponController {
     /**
      * UserCouponInfo를 CouponResponse로 변환
      */
-    private MyCouponResponse.CouponResponse toCouponResponse(UserCouponDto couponInfo) {
+    private MyCouponResponse.CouponResponse toCouponResponse(UserCouponInfo couponInfo) {
         return new MyCouponResponse.CouponResponse(
             couponInfo.getUserCouponId(),
             couponInfo.getCouponId(),

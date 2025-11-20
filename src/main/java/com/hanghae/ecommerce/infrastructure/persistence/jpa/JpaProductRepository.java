@@ -159,4 +159,22 @@ public class JpaProductRepository implements ProductRepository {
             );
         }
     }
+    
+    @Override
+    @Transactional
+    public boolean decreaseStock(Long productId, Quantity quantity) {
+        String sql = """
+            UPDATE products 
+            SET limited_quantity = limited_quantity - ? 
+            WHERE id = ? AND limited_quantity >= ?
+            """;
+        
+        int affectedRows = jdbcTemplate.update(sql, 
+            quantity.getValue(), 
+            productId, 
+            quantity.getValue()
+        );
+        
+        return affectedRows > 0;
+    }
 }

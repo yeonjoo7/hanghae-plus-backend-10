@@ -186,6 +186,20 @@ public class OrderItem {
     }
 
     /**
+     * 단가 조회 (getPrice의 별칭)
+     */
+    public Money getUnitPrice() {
+        return price;
+    }
+
+    /**
+     * 소계 계산 (단가 × 수량, 할인 적용 전)
+     */
+    public Money getSubtotal() {
+        return price.multiply(quantity.getValue());
+    }
+
+    /**
      * 총 금액 계산
      */
     private static Money calculateTotalAmount(Money price, Quantity quantity, Money discountAmount) {

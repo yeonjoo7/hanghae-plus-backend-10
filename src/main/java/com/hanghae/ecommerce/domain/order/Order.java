@@ -114,6 +114,13 @@ public class Order {
     }
 
     /**
+     * 주문 완료 처리 (결제 완료와 동일한 동작)
+     */
+    public void complete() {
+        completePayment();
+    }
+
+    /**
      * 주문 취소
      */
     public void cancel() {
@@ -255,6 +262,13 @@ public class Order {
     public Address getAddress() { return address; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
+    
+    /**
+     * 최종 금액 조회 (getTotalAmount의 별칭)
+     */
+    public Money getFinalAmount() {
+        return totalAmount;
+    }
 
     @Override
     public boolean equals(Object o) {

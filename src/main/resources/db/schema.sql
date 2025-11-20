@@ -1,6 +1,6 @@
 -- 사용자 테이블
 CREATE TABLE IF NOT EXISTS users (
-    id VARCHAR(36) PRIMARY KEY,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL,
     balance DECIMAL(15,2) DEFAULT 0 NOT NULL CHECK (balance >= 0),
@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- 상품 테이블
 CREATE TABLE IF NOT EXISTS products (
-    id VARCHAR(36) PRIMARY KEY,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     price DECIMAL(15,2) NOT NULL CHECK (price >= 0),
     stock INT DEFAULT 0 NOT NULL CHECK (stock >= 0),
@@ -24,8 +24,8 @@ CREATE TABLE IF NOT EXISTS products (
 
 -- 상품 옵션 테이블
 CREATE TABLE IF NOT EXISTS product_options (
-    id VARCHAR(36) PRIMARY KEY,
-    product_id VARCHAR(36) NOT NULL,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    product_id BIGINT NOT NULL,
     name VARCHAR(100) NOT NULL,
     additional_price DECIMAL(15,2) DEFAULT 0 NOT NULL,
     stock INT DEFAULT 0 NOT NULL CHECK (stock >= 0),
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS product_options (
 
 -- 쿠폰 테이블
 CREATE TABLE IF NOT EXISTS coupons (
-    id VARCHAR(36) PRIMARY KEY,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     discount_type VARCHAR(20) NOT NULL,
     discount_value DECIMAL(15,2) NOT NULL,
@@ -53,9 +53,9 @@ CREATE TABLE IF NOT EXISTS coupons (
 
 -- 사용자 쿠폰 테이블
 CREATE TABLE IF NOT EXISTS user_coupons (
-    id VARCHAR(36) PRIMARY KEY,
-    user_id VARCHAR(36) NOT NULL,
-    coupon_id VARCHAR(36) NOT NULL,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    coupon_id BIGINT NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE',
     issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     used_at TIMESTAMP NULL,
@@ -69,8 +69,8 @@ CREATE TABLE IF NOT EXISTS user_coupons (
 
 -- 장바구니 테이블
 CREATE TABLE IF NOT EXISTS carts (
-    id VARCHAR(36) PRIMARY KEY,
-    user_id VARCHAR(36) NOT NULL,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -80,10 +80,10 @@ CREATE TABLE IF NOT EXISTS carts (
 
 -- 장바구니 아이템 테이블
 CREATE TABLE IF NOT EXISTS cart_items (
-    id VARCHAR(36) PRIMARY KEY,
-    cart_id VARCHAR(36) NOT NULL,
-    product_id VARCHAR(36) NOT NULL,
-    product_option_id VARCHAR(36),
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    cart_id BIGINT NOT NULL,
+    product_id BIGINT NOT NULL,
+    product_option_id BIGINT,
     quantity INT NOT NULL CHECK (quantity > 0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -96,14 +96,14 @@ CREATE TABLE IF NOT EXISTS cart_items (
 
 -- 주문 테이블
 CREATE TABLE IF NOT EXISTS orders (
-    id VARCHAR(36) PRIMARY KEY,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     order_number VARCHAR(50) NOT NULL UNIQUE,
-    user_id VARCHAR(36) NOT NULL,
+    user_id BIGINT NOT NULL,
     total_amount DECIMAL(15,2) NOT NULL,
     discount_amount DECIMAL(15,2) DEFAULT 0,
     final_amount DECIMAL(15,2) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
-    coupon_id VARCHAR(36),
+    coupon_id BIGINT,
     shipping_address TEXT,
     recipient_name VARCHAR(100),
     recipient_phone VARCHAR(20),
@@ -121,10 +121,10 @@ CREATE TABLE IF NOT EXISTS orders (
 
 -- 주문 아이템 테이블
 CREATE TABLE IF NOT EXISTS order_items (
-    id VARCHAR(36) PRIMARY KEY,
-    order_id VARCHAR(36) NOT NULL,
-    product_id VARCHAR(36) NOT NULL,
-    product_option_id VARCHAR(36),
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL,
+    product_id BIGINT NOT NULL,
+    product_option_id BIGINT,
     product_name VARCHAR(255) NOT NULL,
     product_option_name VARCHAR(100),
     quantity INT NOT NULL CHECK (quantity > 0),
@@ -138,8 +138,8 @@ CREATE TABLE IF NOT EXISTS order_items (
 
 -- 결제 테이블
 CREATE TABLE IF NOT EXISTS payments (
-    id VARCHAR(36) PRIMARY KEY,
-    order_id VARCHAR(36) NOT NULL,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL,
     payment_method VARCHAR(20) NOT NULL,
     amount DECIMAL(15,2) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
@@ -154,13 +154,13 @@ CREATE TABLE IF NOT EXISTS payments (
 
 -- 잔액 거래 테이블
 CREATE TABLE IF NOT EXISTS balance_transactions (
-    id VARCHAR(36) PRIMARY KEY,
-    user_id VARCHAR(36) NOT NULL,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
     type VARCHAR(20) NOT NULL,
     amount DECIMAL(15,2) NOT NULL,
     balance_after DECIMAL(15,2) NOT NULL,
     description VARCHAR(255),
-    reference_id VARCHAR(36),
+    reference_id BIGINT,
     reference_type VARCHAR(20),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),
@@ -171,14 +171,14 @@ CREATE TABLE IF NOT EXISTS balance_transactions (
 
 -- 재고 테이블 (재고 변경 이력 관리)
 CREATE TABLE IF NOT EXISTS stock_movements (
-    id VARCHAR(36) PRIMARY KEY,
-    product_id VARCHAR(36) NOT NULL,
-    product_option_id VARCHAR(36),
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    product_id BIGINT NOT NULL,
+    product_option_id BIGINT,
     type VARCHAR(20) NOT NULL,
     quantity INT NOT NULL,
     stock_after INT NOT NULL,
     reason VARCHAR(255),
-    reference_id VARCHAR(36),
+    reference_id BIGINT,
     reference_type VARCHAR(20),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (product_id) REFERENCES products(id),
@@ -188,8 +188,8 @@ CREATE TABLE IF NOT EXISTS stock_movements (
 
 -- 외부 데이터 전송 테이블 (Outbox 패턴)
 CREATE TABLE IF NOT EXISTS data_transmissions (
-    id VARCHAR(36) PRIMARY KEY,
-    aggregate_id VARCHAR(36) NOT NULL,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    aggregate_id BIGINT NOT NULL,
     aggregate_type VARCHAR(50) NOT NULL,
     event_type VARCHAR(50) NOT NULL,
     payload JSON NOT NULL,
@@ -206,7 +206,7 @@ CREATE TABLE IF NOT EXISTS data_transmissions (
 -- 인기 상품 캐시 테이블
 CREATE TABLE IF NOT EXISTS popular_products_cache (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    product_id VARCHAR(36) NOT NULL,
+    product_id BIGINT NOT NULL,
     sales_count BIGINT DEFAULT 0,
     calculated_at TIMESTAMP NOT NULL,
     ranking INT NOT NULL,

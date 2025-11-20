@@ -85,7 +85,7 @@ public class PaymentController {
         );
         
         return new PaymentResponse(
-            paymentResult.getPaymentId(),
+            Long.valueOf(paymentResult.getPaymentId()),
             paymentResult.getOrder().getId(),
             paymentResult.getOrderNumber(),
             paymentResult.getPayment().getMethod().name(),

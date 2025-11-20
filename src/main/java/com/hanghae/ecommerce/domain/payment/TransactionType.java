@@ -6,7 +6,8 @@ package com.hanghae.ecommerce.domain.payment;
 public enum TransactionType {
     CHARGE("충전"),
     PAYMENT("결제"),
-    REFUND("환불");
+    REFUND("환불"),
+    USE("사용");
 
     private final String description;
 
@@ -40,6 +41,13 @@ public enum TransactionType {
     }
 
     /**
+     * 사용 거래인지 확인
+     */
+    public boolean isUse() {
+        return this == USE;
+    }
+
+    /**
      * 잔액 증가 거래인지 확인
      */
     public boolean isBalanceIncrease() {
@@ -50,7 +58,7 @@ public enum TransactionType {
      * 잔액 감소 거래인지 확인
      */
     public boolean isBalanceDecrease() {
-        return this == PAYMENT;
+        return this == PAYMENT || this == USE;
     }
 
     /**

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +32,7 @@ import static org.assertj.core.api.Assertions.*;
  * 재고 동시 차감에서 Race Condition이 발생하지 않는지 검증합니다.
  */
 @SpringBootTest(classes = com.hanghae.ecommerce.EcommerceApiApplication.class)
+@ActiveProfiles("test")
 class StockConcurrencyTest {
 
     @Autowired

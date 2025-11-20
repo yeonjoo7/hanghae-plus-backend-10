@@ -5,6 +5,7 @@ package com.hanghae.ecommerce.domain.payment;
  */
 public enum PaymentMethod {
     POINT("포인트"),
+    BALANCE("잔액"),
     CARD("카드"),
     BANK_TRANSFER("계좌이체");
 
@@ -23,6 +24,13 @@ public enum PaymentMethod {
      */
     public boolean isPoint() {
         return this == POINT;
+    }
+    
+    /**
+     * 잔액 결제인지 확인
+     */
+    public boolean isBalance() {
+        return this == BALANCE;
     }
 
     /**
@@ -43,7 +51,7 @@ public enum PaymentMethod {
      * 즉시 처리 가능한 결제 수단인지 확인
      */
     public boolean isInstantProcessable() {
-        return this == POINT;
+        return this == POINT || this == BALANCE;
     }
 
     /**

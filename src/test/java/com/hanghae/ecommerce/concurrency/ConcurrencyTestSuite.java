@@ -28,6 +28,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.context.annotation.Import;
+import com.hanghae.ecommerce.config.TestConfig;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -47,6 +50,8 @@ import static org.assertj.core.api.Assertions.*;
  * 실제 서비스에서 발생할 수 있는 복합적인 동시성 시나리오를 테스트합니다.
  */
 @SpringBootTest(classes = com.hanghae.ecommerce.EcommerceApiApplication.class)
+@ActiveProfiles("test")
+@Import(TestConfig.class)
 class ConcurrencyTestSuite {
 
     @Autowired private CouponService couponService;

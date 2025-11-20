@@ -2,6 +2,7 @@ package com.hanghae.ecommerce.domain.product.repository;
 
 import com.hanghae.ecommerce.domain.product.Product;
 import com.hanghae.ecommerce.domain.product.ProductState;
+import com.hanghae.ecommerce.domain.product.Quantity;
 import java.util.List;
 import java.util.Optional;
 
@@ -79,4 +80,12 @@ public interface ProductRepository {
      * 이름 검색 + 판매 가능한 상품 목록 조회
      */
     List<Product> findByNameContainingAndStateIsAvailable(String keyword);
+    
+    /**
+     * 재고 감소
+     * @param productId 상품 ID
+     * @param quantity 감소할 수량
+     * @return 성공 여부
+     */
+    boolean decreaseStock(Long productId, Quantity quantity);
 }

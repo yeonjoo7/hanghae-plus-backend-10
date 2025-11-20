@@ -19,6 +19,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -38,6 +39,7 @@ import static org.assertj.core.api.Assertions.*;
  * 선착순 쿠폰 발급에서 Race Condition이 발생하지 않는지 검증합니다.
  */
 @SpringBootTest(classes = com.hanghae.ecommerce.EcommerceApiApplication.class)
+@ActiveProfiles("test")
 class CouponConcurrencyTest {
 
     @Autowired

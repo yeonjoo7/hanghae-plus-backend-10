@@ -113,7 +113,8 @@ public class PaymentServiceImpl implements PaymentService {
             );
             
             if (!stockDecreased) {
-                throw new InsufficientStockException("재고가 부족합니다: " + item.getProductId());
+                // 재고 부족시 예외 발생 - 요청 수량과 가용 재고를 정확히 알 수 없으므로 임시값 사용
+                throw new InsufficientStockException(item.getQuantity().getValue(), 0);
             }
         }
 
@@ -134,16 +135,21 @@ public class PaymentServiceImpl implements PaymentService {
         Payment payment = Payment.create(
                 Long.valueOf(orderId),
                 paymentMethod,
-                order.getTotalAmount()
+                order.getTotalAmount(),
+                null // 포인트 결제는 즉시 처리되므로 만료 시간 불필요
         );
         payment.complete();
         paymentRepository.save(payment);
 
         // 6. 잔액 거래 내역 저장
-        BalanceTransaction transaction = BalanceTransaction.create(
+        Point beforeBalance = Point.of(user.getAvailablePoint().getValue() + order.getTotalAmount().getValue());
+        Point afterBalance = user.getAvailablePoint();
+        
+        BalanceTransaction transaction = BalanceTransaction.createPayment(
                 Long.valueOf(userId),
-                TransactionType.USE,
-                order.getTotalAmount(),
+                Long.valueOf(orderId),
+                Point.of(order.getTotalAmount().getValue()),
+                beforeBalance,
                 "주문 결제: " + order.getOrderNumber().getValue()
         );
         balanceTransactionRepository.save(transaction);
@@ -181,12 +187,12 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public Payment getPayment(String paymentId) {
-        return paymentRepository.findById(paymentId)
+        return paymentRepository.findById(Long.valueOf(paymentId))
                 .orElseThrow(() -> new IllegalArgumentException("결제 정보를 찾을 수 없습니다"));
     }
 
     @Override
     public List<Payment> getPaymentsByOrderId(String orderId) {
-        return paymentRepository.findByOrderId(orderId);
+        return paymentRepository.findByOrderId(Long.valueOf(orderId));
     }
 }

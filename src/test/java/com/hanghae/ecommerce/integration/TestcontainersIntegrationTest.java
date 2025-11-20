@@ -1,17 +1,13 @@
 package com.hanghae.ecommerce.integration;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.DockerClientFactory;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -19,14 +15,14 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Testcontainers 기반 통합 테스트
  * 
  * MySQL 컨테이너를 사용하여 실제 데이터베이스 연결 및 기본 쿼리 실행을 검증합니다.
+ * Docker가 실행 중일 때만 테스트가 실행됩니다.
  */
-@SpringBootTest
-@ActiveProfiles("test")
 @Testcontainers
 @DisplayName("Testcontainers 통합 테스트")
 class TestcontainersIntegrationTest {
@@ -38,35 +34,31 @@ class TestcontainersIntegrationTest {
             .withPassword("test")
             .withReuse(true);
 
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", mysql::getJdbcUrl);
-        registry.add("spring.datasource.username", mysql::getUsername);
-        registry.add("spring.datasource.password", mysql::getPassword);
+    private static DataSource dataSource;
+
+    @BeforeAll
+    static void checkDockerAvailability() {
+        // Docker 데몬이 실행 중인지 확인
+        try {
+            DockerClientFactory.instance().client();
+            System.out.println("Docker is available and running");
+            
+            // MySQL 컨테이너 시작
+            mysql.start();
+            
+            // DataSource 생성
+            dataSource = DataSourceBuilder.create()
+                .url(mysql.getJdbcUrl())
+                .username(mysql.getUsername())
+                .password(mysql.getPassword())
+                .driverClassName("com.mysql.cj.jdbc.Driver")
+                .build();
+                
+        } catch (Exception e) {
+            assumeTrue(false, "Docker is not available or not running: " + e.getMessage());
+        }
     }
 
-    @Autowired
-    private DataSource dataSource;
-    
-    @BeforeEach
-    void setUp() throws Exception {
-        // 각 테스트 실행 전에 테스트용 테이블들이 없는지 확인하고 삭제
-        try (Connection connection = dataSource.getConnection();
-             Statement statement = connection.createStatement()) {
-            statement.execute("DROP TABLE IF EXISTS test_table");
-            statement.execute("DROP TABLE IF EXISTS test_user");
-        }
-    }
-    
-    @AfterEach
-    void tearDown() throws Exception {
-        // 각 테스트 실행 후 생성된 테스트용 테이블들을 삭제
-        try (Connection connection = dataSource.getConnection();
-             Statement statement = connection.createStatement()) {
-            statement.execute("DROP TABLE IF EXISTS test_table");
-            statement.execute("DROP TABLE IF EXISTS test_user");
-        }
-    }
 
     @Test
     @DisplayName("MySQL 컨테이너 연결 성공")

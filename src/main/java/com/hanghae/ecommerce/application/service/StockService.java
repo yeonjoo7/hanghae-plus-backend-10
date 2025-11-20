@@ -6,7 +6,6 @@ import com.hanghae.ecommerce.domain.product.Stock;
 import com.hanghae.ecommerce.domain.product.repository.ProductRepository;
 import com.hanghae.ecommerce.domain.product.repository.StockRepository;
 import com.hanghae.ecommerce.infrastructure.lock.LockManager;
-import com.hanghae.ecommerce.infrastructure.lock.InMemoryLockManager;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -144,7 +143,7 @@ public class StockService {
             throw new IllegalArgumentException("차감할 수량은 0보다 커야 합니다.");
         }
 
-        String lockKey = InMemoryLockManager.createStockLockKey(productId);
+        String lockKey = "stock:" + productId;
         
         lockManager.executeWithLock(lockKey, () -> {
             // 상품 판매 가능 여부 확인
@@ -232,7 +231,7 @@ public class StockService {
             throw new IllegalArgumentException("복구할 수량은 0보다 커야 합니다.");
         }
 
-        String lockKey = InMemoryLockManager.createStockLockKey(productId);
+        String lockKey = "stock:" + productId;
         
         lockManager.executeWithLock(lockKey, () -> {
             Product product = productRepository.findById(productId)

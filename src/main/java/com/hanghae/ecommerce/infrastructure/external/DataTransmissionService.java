@@ -24,9 +24,9 @@ public class DataTransmissionService {
     private final String apiUrl;
     private final String apiKey;
 
-    public DataTransmissionService(RestTemplateBuilder restTemplateBuilder, 
-                                 JdbcTemplate jdbcTemplate,
-                                 ObjectMapper objectMapper) {
+    public DataTransmissionService(RestTemplateBuilder restTemplateBuilder,
+            JdbcTemplate jdbcTemplate,
+            ObjectMapper objectMapper) {
         this.restTemplate = restTemplateBuilder
                 .setConnectTimeout(Duration.ofSeconds(5))
                 .setReadTimeout(Duration.ofSeconds(5))
@@ -55,13 +55,14 @@ public class DataTransmissionService {
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(orderData, headers);
 
             // 외부 API POST 요청
-            Map<String, Object> response = restTemplate.postForObject(
+            org.springframework.http.ResponseEntity<Map<String, Object>> responseEntity = restTemplate.exchange(
                     apiUrl + "/api/orders",
+                    org.springframework.http.HttpMethod.POST,
                     request,
-                    Map.class
-            );
+                    new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {
+                    });
 
-            return response;
+            return responseEntity.getBody();
 
         } catch (Exception e) {
             // 실패 시 Outbox 테이블에 저장
@@ -76,19 +77,18 @@ public class DataTransmissionService {
     public void saveToOutbox(String aggregateType, String aggregateId, String eventType, Map<String, Object> data) {
         try {
             String payload = objectMapper.writeValueAsString(data);
-            
+
             jdbcTemplate.update(
                     """
-                    INSERT INTO data_transmissions 
-                    (id, aggregate_type, aggregate_id, event_type, payload, status, attempts) 
-                    VALUES (?, ?, ?, ?, ?, 'PENDING', 0)
-                    """,
+                            INSERT INTO data_transmissions
+                            (id, aggregate_type, aggregate_id, event_type, payload, status, attempts)
+                            VALUES (?, ?, ?, ?, ?, 'PENDING', 0)
+                            """,
                     UUID.randomUUID().toString(),
                     aggregateType,
                     aggregateId,
                     eventType,
-                    payload
-            );
+                    payload);
         } catch (Exception e) {
             throw new RuntimeException("Failed to save to outbox", e);
         }
@@ -100,60 +100,58 @@ public class DataTransmissionService {
     public void retryPendingTransmissions() {
         List<Map<String, Object>> pending = jdbcTemplate.queryForList(
                 """
-                SELECT * FROM data_transmissions
-                WHERE status = 'PENDING' AND attempts < 3
-                ORDER BY created_at
-                LIMIT 10
-                """
-        );
+                        SELECT * FROM data_transmissions
+                        WHERE status = 'PENDING' AND attempts < 3
+                        ORDER BY created_at
+                        LIMIT 10
+                        """);
 
         for (Map<String, Object> transmission : pending) {
             String id = (String) transmission.get("id");
             String payload = (String) transmission.get("payload");
-            
+
             try {
                 // JSON 문자열을 Map으로 파싱
-                Map<String, Object> orderData = objectMapper.readValue(payload, Map.class);
-                
+                Map<String, Object> orderData = objectMapper.readValue(payload,
+                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
+                        });
+
                 // 재시도
                 send(orderData);
 
                 // 성공 시 상태 업데이트
                 jdbcTemplate.update(
                         "UPDATE data_transmissions SET status = 'SUCCESS', sent_at = NOW() WHERE id = ?",
-                        id
-                );
+                        id);
 
             } catch (Exception e) {
                 // 실패 시 재시도 횟수 증가
                 jdbcTemplate.update(
                         "UPDATE data_transmissions SET attempts = attempts + 1, error_message = ? WHERE id = ?",
-                        e.getMessage(), id
-                );
+                        e.getMessage(), id);
 
                 // 3회 실패 시 FAILED 마킹
                 Integer attempts = (Integer) transmission.get("attempts");
                 if (attempts != null && attempts >= 2) {
                     jdbcTemplate.update(
                             "UPDATE data_transmissions SET status = 'FAILED', failed_at = NOW() WHERE id = ?",
-                            id
-                    );
+                            id);
                 }
             }
         }
     }
-    
+
     /**
      * 특정 이벤트 타입의 전송 내역 조회
      */
     public List<Map<String, Object>> getTransmissionHistory(String eventType, String status) {
         String sql = """
-            SELECT * FROM data_transmissions
-            WHERE event_type = ? AND status = ?
-            ORDER BY created_at DESC
-            LIMIT 100
-            """;
-        
+                SELECT * FROM data_transmissions
+                WHERE event_type = ? AND status = ?
+                ORDER BY created_at DESC
+                LIMIT 100
+                """;
+
         return jdbcTemplate.queryForList(sql, eventType, status);
     }
 }
