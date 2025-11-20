@@ -2,8 +2,12 @@
 CREATE TABLE IF NOT EXISTS users (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
+    status VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
+    type VARCHAR(20) NOT NULL DEFAULT 'CUSTOMER',
     name VARCHAR(100) NOT NULL,
-    balance DECIMAL(15,2) DEFAULT 0 NOT NULL CHECK (balance >= 0),
+    phone VARCHAR(20),
+    available_point INT DEFAULT 0 NOT NULL CHECK (available_point >= 0),
+    used_point INT DEFAULT 0 NOT NULL CHECK (used_point >= 0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_email (email)
@@ -13,13 +17,27 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS products (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    description TEXT,
     price DECIMAL(15,2) NOT NULL CHECK (price >= 0),
-    stock INT DEFAULT 0 NOT NULL CHECK (stock >= 0),
-    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    limited_quantity INT DEFAULT 0 NOT NULL CHECK (limited_quantity >= 0),
+    status VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_status (status),
     INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 재고 테이블
+CREATE TABLE IF NOT EXISTS stocks (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    product_id BIGINT NOT NULL,
+    product_option_id BIGINT,
+    available_quantity INT NOT NULL DEFAULT 0,
+    sold_quantity INT NOT NULL DEFAULT 0,
+    memo VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_product_id (product_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 상품 옵션 테이블
@@ -30,7 +48,6 @@ CREATE TABLE IF NOT EXISTS product_options (
     additional_price DECIMAL(15,2) DEFAULT 0 NOT NULL,
     stock INT DEFAULT 0 NOT NULL CHECK (stock >= 0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (product_id) REFERENCES products(id),
     INDEX idx_product_id (product_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -38,6 +55,7 @@ CREATE TABLE IF NOT EXISTS product_options (
 CREATE TABLE IF NOT EXISTS coupons (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
     discount_type VARCHAR(20) NOT NULL,
     discount_value DECIMAL(15,2) NOT NULL,
     min_order_amount DECIMAL(15,2) DEFAULT 0,
@@ -47,6 +65,7 @@ CREATE TABLE IF NOT EXISTS coupons (
     start_date TIMESTAMP NOT NULL,
     end_date TIMESTAMP NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_dates (start_date, end_date),
     INDEX idx_status (issued_quantity, total_quantity)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -60,8 +79,6 @@ CREATE TABLE IF NOT EXISTS user_coupons (
     issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     used_at TIMESTAMP NULL,
     expires_at TIMESTAMP NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (coupon_id) REFERENCES coupons(id),
     UNIQUE KEY uk_user_coupon (user_id, coupon_id),
     INDEX idx_user_status (user_id, status),
     INDEX idx_expires_at (expires_at)
@@ -71,10 +88,10 @@ CREATE TABLE IF NOT EXISTS user_coupons (
 CREATE TABLE IF NOT EXISTS carts (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    user_coupon_id BIGINT,
+    status VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id),
     INDEX idx_user_status (user_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -87,9 +104,6 @@ CREATE TABLE IF NOT EXISTS cart_items (
     quantity INT NOT NULL CHECK (quantity > 0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (cart_id) REFERENCES carts(id),
-    FOREIGN KEY (product_id) REFERENCES products(id),
-    FOREIGN KEY (product_option_id) REFERENCES product_options(id),
     UNIQUE KEY uk_cart_product_option (cart_id, product_id, product_option_id),
     INDEX idx_cart_id (cart_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -112,7 +126,6 @@ CREATE TABLE IF NOT EXISTS orders (
     shipped_at TIMESTAMP NULL,
     delivered_at TIMESTAMP NULL,
     cancelled_at TIMESTAMP NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id),
     INDEX idx_user_id (user_id),
     INDEX idx_status (status),
     INDEX idx_order_number (order_number),
@@ -131,8 +144,6 @@ CREATE TABLE IF NOT EXISTS order_items (
     unit_price DECIMAL(15,2) NOT NULL,
     subtotal DECIMAL(15,2) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (order_id) REFERENCES orders(id),
-    FOREIGN KEY (product_id) REFERENCES products(id),
     INDEX idx_order_id (order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -147,7 +158,6 @@ CREATE TABLE IF NOT EXISTS payments (
     failed_at TIMESTAMP NULL,
     failed_reason TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (order_id) REFERENCES orders(id),
     INDEX idx_order_id (order_id),
     INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -163,7 +173,6 @@ CREATE TABLE IF NOT EXISTS balance_transactions (
     reference_id BIGINT,
     reference_type VARCHAR(20),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id),
     INDEX idx_user_id (user_id),
     INDEX idx_created_at (created_at),
     INDEX idx_reference (reference_id, reference_type)
@@ -181,7 +190,6 @@ CREATE TABLE IF NOT EXISTS stock_movements (
     reference_id BIGINT,
     reference_type VARCHAR(20),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (product_id) REFERENCES products(id),
     INDEX idx_product_id (product_id),
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -212,7 +220,6 @@ CREATE TABLE IF NOT EXISTS popular_products_cache (
     ranking INT NOT NULL,
     period_start TIMESTAMP NOT NULL,
     period_end TIMESTAMP NOT NULL,
-    FOREIGN KEY (product_id) REFERENCES products(id),
     INDEX idx_calculated_ranking (calculated_at, ranking),
     INDEX idx_period (period_start, period_end)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -6,11 +6,15 @@ import com.hanghae.ecommerce.domain.coupon.repository.UserCouponRepository;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,22 +33,49 @@ public class JpaUserCouponRepository implements UserCouponRepository {
     @Override
     @Transactional
     public UserCoupon save(UserCoupon userCoupon) {
+        if (userCoupon.getId() == null) {
+            return insert(userCoupon);
+        } else {
+            return update(userCoupon);
+        }
+    }
+    
+    private UserCoupon insert(UserCoupon userCoupon) {
         String sql = """
-            INSERT INTO user_coupons (id, user_id, coupon_id, status, issued_at, used_at, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-                status = VALUES(status),
-                used_at = VALUES(used_at)
+            INSERT INTO user_coupons (user_id, coupon_id, status, issued_at, used_at, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """;
+        
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        jdbcTemplate.update(connection -> {
+            PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            ps.setLong(1, userCoupon.getUserId());
+            ps.setLong(2, userCoupon.getCouponId());
+            ps.setString(3, userCoupon.getState().name());
+            ps.setTimestamp(4, Timestamp.valueOf(userCoupon.getIssuedAt()));
+            ps.setTimestamp(5, userCoupon.getUsedAt() != null ? Timestamp.valueOf(userCoupon.getUsedAt()) : null);
+            ps.setTimestamp(6, Timestamp.valueOf(userCoupon.getExpiresAt()));
+            return ps;
+        }, keyHolder);
+        
+        Long id = keyHolder.getKey().longValue();
+        return UserCoupon.restore(id, userCoupon.getUserId(), userCoupon.getCouponId(), 
+                                userCoupon.getState(), userCoupon.getIssuedAt(), 
+                                userCoupon.getUsedAt(), userCoupon.getExpiresAt(),
+                                userCoupon.getCreatedAt(), userCoupon.getUpdatedAt());
+    }
+    
+    private UserCoupon update(UserCoupon userCoupon) {
+        String sql = """
+            UPDATE user_coupons 
+            SET status = ?, used_at = ?
+            WHERE id = ?
             """;
         
         jdbcTemplate.update(sql,
-            userCoupon.getId(),
-            userCoupon.getUserId(),
-            userCoupon.getCouponId(),
             userCoupon.getState().name(),
-            Timestamp.valueOf(userCoupon.getIssuedAt()),
             userCoupon.getUsedAt() != null ? Timestamp.valueOf(userCoupon.getUsedAt()) : null,
-            Timestamp.valueOf(userCoupon.getExpiresAt())
+            userCoupon.getId()
         );
         
         return userCoupon;
@@ -238,16 +269,18 @@ public class JpaUserCouponRepository implements UserCouponRepository {
             Timestamp usedAtTimestamp = rs.getTimestamp("used_at");
             LocalDateTime usedAt = usedAtTimestamp != null ? usedAtTimestamp.toLocalDateTime() : null;
             
+            LocalDateTime issuedAt = rs.getTimestamp("issued_at").toLocalDateTime();
+            
             return UserCoupon.restore(
                 rs.getLong("id"),
                 rs.getLong("user_id"),
                 rs.getLong("coupon_id"),
                 UserCouponState.valueOf(rs.getString("status")),
-                rs.getTimestamp("issued_at").toLocalDateTime(),
+                issuedAt,
                 usedAt,
                 rs.getTimestamp("expires_at").toLocalDateTime(),
-                rs.getTimestamp("created_at").toLocalDateTime(),
-                rs.getTimestamp("updated_at").toLocalDateTime()
+                issuedAt, // createdAt으로 issuedAt 사용
+                issuedAt  // updatedAt으로 issuedAt 사용
             );
         }
     }

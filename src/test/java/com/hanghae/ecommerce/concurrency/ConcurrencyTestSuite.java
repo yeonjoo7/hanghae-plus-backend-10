@@ -132,7 +132,7 @@ class ConcurrencyTestSuite extends BaseIntegrationTest {
                 "한정 쿠폰 " + timestamp,
                 DiscountPolicy.amount(Money.of(500)),
                 Quantity.of(limitedCoupons),
-                LocalDateTime.now(),
+                LocalDateTime.now().minusSeconds(10),
                 LocalDateTime.now().plusHours(1));
         final Coupon finalLimitedCoupon = couponRepository.save(limitedCoupon);
 
@@ -168,7 +168,7 @@ class ConcurrencyTestSuite extends BaseIntegrationTest {
                     boolean hasCoupon = false;
                     if (shouldTryCoupon) {
                         try {
-                            couponService.issueCoupon(user.getId(), finalLimitedCoupon.getId());
+                            couponService.issueCoupon(finalLimitedCoupon.getId(), user.getId());
                             successfulCouponIssues.incrementAndGet();
                             hasCoupon = true;
                         } catch (Exception e) {

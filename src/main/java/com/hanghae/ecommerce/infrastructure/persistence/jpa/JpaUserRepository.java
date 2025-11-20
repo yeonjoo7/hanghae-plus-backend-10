@@ -11,50 +11,75 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
+
 @Repository
 public class JpaUserRepository implements UserRepository {
-    
+
     private final JdbcTemplate jdbcTemplate;
     private final UserRowMapper userRowMapper = new UserRowMapper();
-    
+
     public JpaUserRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
-    
+
     @Override
     @Transactional
     public User save(User user) {
-        String sql = """
-            INSERT INTO users (id, email, status, type, name, phone, available_point, used_point, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-            ON DUPLICATE KEY UPDATE
-                email = VALUES(email),
-                status = VALUES(status),
-                type = VALUES(type),
-                name = VALUES(name),
-                phone = VALUES(phone),
-                available_point = VALUES(available_point),
-                used_point = VALUES(used_point),
-                updated_at = NOW()
-            """;
-        
-        jdbcTemplate.update(sql,
-            user.getId(),
-            user.getEmail(),
-            user.getState().name(),
-            user.getType().name(),
-            user.getName(),
-            user.getPhone(),
-            user.getAvailablePoint().getValue(),
-            user.getUsedPoint().getValue()
-        );
-        
-        return user;
+        if (user.getId() == null) {
+            String sql = "INSERT INTO users (email, status, type, name, phone, available_point, used_point, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+            KeyHolder keyHolder = new GeneratedKeyHolder();
+
+            jdbcTemplate.update(connection -> {
+                PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+                ps.setString(1, user.getEmail());
+                ps.setString(2, user.getState().name());
+                ps.setString(3, user.getType().name());
+                ps.setString(4, user.getName());
+                ps.setString(5, user.getPhone());
+                ps.setInt(6, user.getAvailablePoint().getValue());
+                ps.setInt(7, user.getUsedPoint().getValue());
+                return ps;
+            }, keyHolder);
+
+            Number key = keyHolder.getKey();
+            if (key == null) {
+                throw new RuntimeException("Failed to insert user, no ID obtained.");
+            }
+
+            return User.restore(
+                    key.longValue(),
+                    user.getEmail(),
+                    user.getState(),
+                    user.getType(),
+                    user.getName(),
+                    user.getPhone(),
+                    user.getAvailablePoint(),
+                    user.getUsedPoint(),
+                    LocalDateTime.now(),
+                    LocalDateTime.now());
+        } else {
+            String sql = "UPDATE users SET email=?, status=?, type=?, name=?, phone=?, available_point=?, used_point=?, updated_at=NOW() WHERE id=?";
+            jdbcTemplate.update(sql,
+                    user.getEmail(),
+                    user.getState().name(),
+                    user.getType().name(),
+                    user.getName(),
+                    user.getPhone(),
+                    user.getAvailablePoint().getValue(),
+                    user.getUsedPoint().getValue(),
+                    user.getId());
+            return user;
+        }
     }
 
     @Override
@@ -63,7 +88,7 @@ public class JpaUserRepository implements UserRepository {
         List<User> users = jdbcTemplate.query(sql, userRowMapper, id);
         return users.isEmpty() ? Optional.empty() : Optional.of(users.get(0));
     }
-    
+
     @Override
     public Optional<User> findByEmail(String email) {
         String sql = "SELECT * FROM users WHERE email = ?";
@@ -137,22 +162,20 @@ public class JpaUserRepository implements UserRepository {
         return count != null ? count : 0;
     }
 
-    
     private static class UserRowMapper implements RowMapper<User> {
         @Override
         public User mapRow(ResultSet rs, int rowNum) throws SQLException {
             return User.restore(
-                rs.getLong("id"),
-                rs.getString("email"),
-                UserState.valueOf(rs.getString("status")),
-                UserType.valueOf(rs.getString("type")),
-                rs.getString("name"),
-                rs.getString("phone"),
-                Point.of(rs.getInt("available_point")),
-                Point.of(rs.getInt("used_point")),
-                rs.getTimestamp("created_at").toLocalDateTime(),
-                rs.getTimestamp("updated_at").toLocalDateTime()
-            );
+                    rs.getLong("id"),
+                    rs.getString("email"),
+                    UserState.valueOf(rs.getString("status")),
+                    UserType.valueOf(rs.getString("type")),
+                    rs.getString("name"),
+                    rs.getString("phone"),
+                    Point.of(rs.getInt("available_point")),
+                    Point.of(rs.getInt("used_point")),
+                    rs.getTimestamp("created_at").toLocalDateTime(),
+                    rs.getTimestamp("updated_at").toLocalDateTime());
         }
     }
 }

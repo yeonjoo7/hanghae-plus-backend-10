@@ -57,7 +57,6 @@ public class CouponServiceImpl implements CouponService {
                         SELECT * FROM coupons
                         WHERE id = ?
                         AND issued_quantity < total_quantity
-                        AND NOW() BETWEEN start_date AND end_date
                         FOR UPDATE
                         """,
                 couponId);
@@ -82,7 +81,6 @@ public class CouponServiceImpl implements CouponService {
                 couponId);
 
         // 4. 사용자 쿠폰 발급
-        String userCouponId = UUID.randomUUID().toString();
         LocalDateTime expiresAt = LocalDateTime.now().plusDays(7);
 
         UserCoupon userCoupon = UserCoupon.issue(
@@ -90,11 +88,11 @@ public class CouponServiceImpl implements CouponService {
                 Long.valueOf(couponId),
                 expiresAt);
 
-        userCouponRepository.save(userCoupon);
+        UserCoupon savedUserCoupon = userCouponRepository.save(userCoupon);
 
         // 남은 수량 정보는 도메인 객체에서 처리됩니다
 
-        return userCoupon;
+        return savedUserCoupon;
     }
 
     @Override

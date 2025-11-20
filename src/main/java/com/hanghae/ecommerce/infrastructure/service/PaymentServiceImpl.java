@@ -73,18 +73,13 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional
     public Payment processPayment(String orderId, String userId, PaymentMethod paymentMethod) {
-        // 1. 주문 조회 (락)
-        Order order = jdbcTemplate.queryForObject(
-                "SELECT * FROM orders WHERE id = ? AND user_id = ? AND status = 'PENDING' FOR UPDATE",
-                (rs, rowNum) -> {
-                    // Order 객체 생성 로직
-                    return orderRepository.findById(Long.valueOf(orderId)).orElse(null);
-                },
-                orderId, userId
-        );
+        // 1. 주문 조회
+        Order order = orderRepository.findById(Long.valueOf(orderId))
+                .orElseThrow(() -> new OrderNotFoundException(Long.valueOf(orderId)));
         
-        if (order == null) {
-            throw new OrderNotFoundException(Long.valueOf(orderId));
+        // 사용자 확인
+        if (!order.getUserId().equals(Long.valueOf(userId))) {
+            throw new IllegalArgumentException("잘못된 사용자 요청입니다.");
         }
 
         // 이미 결제된 주문인지 확인

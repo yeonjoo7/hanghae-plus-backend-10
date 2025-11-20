@@ -1,4 +1,4 @@
-package com.hanghae.ecommerce.infrastructure.config;
+package com.hanghae.ecommerce.config;
 
 import com.hanghae.ecommerce.domain.coupon.Coupon;
 import com.hanghae.ecommerce.domain.coupon.DiscountPolicy;
@@ -15,11 +15,13 @@ import com.hanghae.ecommerce.domain.user.UserState;
 import com.hanghae.ecommerce.domain.user.UserType;
 import com.hanghae.ecommerce.domain.user.repository.UserRepository;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
 @Component
+@Profile("!test")
 public class DataInitializer implements CommandLineRunner {
 
     private final UserRepository userRepository;
@@ -28,9 +30,9 @@ public class DataInitializer implements CommandLineRunner {
     private final CouponRepository couponRepository;
 
     public DataInitializer(UserRepository userRepository,
-                          ProductRepository productRepository,
-                          StockRepository stockRepository,
-                          CouponRepository couponRepository) {
+            ProductRepository productRepository,
+            StockRepository stockRepository,
+            CouponRepository couponRepository) {
         this.userRepository = userRepository;
         this.productRepository = productRepository;
         this.stockRepository = stockRepository;
@@ -49,8 +51,7 @@ public class DataInitializer implements CommandLineRunner {
         User user = User.create(
                 "test@example.com",
                 "테스트 사용자",
-                "010-1234-5678"
-        );
+                "010-1234-5678");
         userRepository.save(user);
     }
 
@@ -58,7 +59,7 @@ public class DataInitializer implements CommandLineRunner {
         // 상품 1: 노트북
         Product laptop = Product.create("MacBook Pro", "고성능 노트북", Money.of(1500000), Quantity.of(5));
         productRepository.save(laptop);
-        
+
         // 간단한 초기화만 수행
         productRepository.save(laptop);
     }
