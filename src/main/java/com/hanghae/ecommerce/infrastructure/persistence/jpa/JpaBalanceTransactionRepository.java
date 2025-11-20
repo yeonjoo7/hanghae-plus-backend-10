@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-@Profile("!test")
 public class JpaBalanceTransactionRepository implements BalanceTransactionRepository {
     
     private final JdbcTemplate jdbcTemplate;

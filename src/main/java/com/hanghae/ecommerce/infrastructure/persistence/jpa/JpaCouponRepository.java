@@ -4,10 +4,8 @@ import com.hanghae.ecommerce.domain.coupon.Coupon;
 import com.hanghae.ecommerce.domain.coupon.CouponState;
 import com.hanghae.ecommerce.domain.coupon.DiscountPolicy;
 import com.hanghae.ecommerce.domain.coupon.repository.CouponRepository;
-import com.hanghae.ecommerce.domain.payment.Payment;
 import com.hanghae.ecommerce.domain.product.Money;
 import com.hanghae.ecommerce.domain.product.Quantity;
-import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
@@ -21,7 +19,6 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-@Profile("!test")
 public class JpaCouponRepository implements CouponRepository {
     
     private final JdbcTemplate jdbcTemplate;

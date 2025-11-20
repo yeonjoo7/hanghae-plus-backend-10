@@ -12,8 +12,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,9 +29,9 @@ import static org.assertj.core.api.Assertions.*;
  * 
  * 재고 동시 차감에서 Race Condition이 발생하지 않는지 검증합니다.
  */
-@SpringBootTest(classes = com.hanghae.ecommerce.EcommerceApiApplication.class)
-@ActiveProfiles("test")
-class StockConcurrencyTest {
+import com.hanghae.ecommerce.support.BaseIntegrationTest;
+
+class StockConcurrencyTest extends BaseIntegrationTest {
 
     @Autowired
     private StockService stockService;
@@ -57,10 +55,10 @@ class StockConcurrencyTest {
 
         // 테스트 상품 생성 (매번 새로운 상품 생성)
         testProduct = Product.create(
-            "테스트 상품 " + System.currentTimeMillis(),
-            "동시성 테스트용 상품",
-            com.hanghae.ecommerce.domain.product.Money.of(10000),
-            Quantity.of(10) // 1인당 최대 10개까지 구매 가능
+                "테스트 상품 " + System.currentTimeMillis(),
+                "동시성 테스트용 상품",
+                com.hanghae.ecommerce.domain.product.Money.of(10000),
+                Quantity.of(10) // 1인당 최대 10개까지 구매 가능
         );
         testProduct = productRepository.save(testProduct);
 
@@ -91,10 +89,10 @@ class StockConcurrencyTest {
             executorService.execute(() -> {
                 try {
                     startLatch.await();
-                    
+
                     stockService.reduceStock(testProduct.getId(), quantityPerUser);
                     successCount.incrementAndGet();
-                    
+
                 } catch (Exception e) {
                     failureCount.incrementAndGet();
                     synchronized (exceptions) {
@@ -128,8 +126,8 @@ class StockConcurrencyTest {
 
         executorService.shutdown();
 
-        System.out.printf("재고 차감 테스트 - 성공: %d, 실패: %d%n", 
-                         successCount.get(), failureCount.get());
+        System.out.printf("재고 차감 테스트 - 성공: %d, 실패: %d%n",
+                successCount.get(), failureCount.get());
     }
 
     @Test
@@ -185,8 +183,8 @@ class StockConcurrencyTest {
 
         executorService.shutdown();
 
-        System.out.printf("재고 부족 테스트 - 성공: %d, 실패: %d%n", 
-                         successCount.get(), failureCount.get());
+        System.out.printf("재고 부족 테스트 - 성공: %d, 실패: %d%n",
+                successCount.get(), failureCount.get());
     }
 
     @Test
@@ -238,8 +236,8 @@ class StockConcurrencyTest {
         long duration = endTime - startTime;
         double throughput = (double) concurrentUsers / duration * 1000;
 
-        System.out.printf("대량 재고 테스트 - 처리 시간: %dms, 처리량: %.2f TPS%n", 
-                         duration, throughput);
+        System.out.printf("대량 재고 테스트 - 처리 시간: %dms, 처리량: %.2f TPS%n",
+                duration, throughput);
 
         // 총 차감된 수량이 초기 재고를 초과하지 않아야 함
         assertThat(totalReducedQuantity.get()).isLessThanOrEqualTo(initialStock);
@@ -313,18 +311,18 @@ class StockConcurrencyTest {
 
         Stock finalStock = stockRepository.findByProductIdAndProductOptionIdIsNull(testProduct.getId())
                 .orElseThrow();
-        
+
         // 최종 재고 = 초기 재고 - 성공한 차감 + 성공한 복원
         int expectedFinalStock = initialStock - reductions.get() + restorations.get();
         int actualFinalStock = finalStock.getAvailableQuantity().getValue() + finalStock.getSoldQuantity().getValue();
-        
+
         assertThat(actualFinalStock).isEqualTo(expectedFinalStock);
 
         executorService.shutdown();
 
-        System.out.printf("차감/복원 테스트 - 차감: %d, 복원: %d, 최종 재고: %d%n", 
-                         reductions.get(), restorations.get(), 
-                         finalStock.getAvailableQuantity().getValue());
+        System.out.printf("차감/복원 테스트 - 차감: %d, 복원: %d, 최종 재고: %d%n",
+                reductions.get(), restorations.get(),
+                finalStock.getAvailableQuantity().getValue());
     }
 
     @Test
@@ -338,11 +336,10 @@ class StockConcurrencyTest {
         long timestamp = System.currentTimeMillis();
         for (int i = 1; i <= 5; i++) {
             Product product = Product.create(
-                "상품" + timestamp + "_" + i,
-                "테스트 상품" + i,
-                com.hanghae.ecommerce.domain.product.Money.of(1000 * i),
-                Quantity.of(5)
-            );
+                    "상품" + timestamp + "_" + i,
+                    "테스트 상품" + i,
+                    com.hanghae.ecommerce.domain.product.Money.of(1000 * i),
+                    Quantity.of(5));
             product = productRepository.save(product);
             products.add(product);
 
@@ -434,8 +431,8 @@ class StockConcurrencyTest {
         long durationMs = (endTime - startTime) / 1_000_000;
         double throughput = (double) operations / durationMs * 1000;
 
-        System.out.printf("재고 차감 성능 - %d건 처리 시간: %dms, 처리량: %.2f TPS%n", 
-                         operations, durationMs, throughput);
+        System.out.printf("재고 차감 성능 - %d건 처리 시간: %dms, 처리량: %.2f TPS%n",
+                operations, durationMs, throughput);
 
         // 성능 기준: 1000건을 10초 내에 처리
         assertThat(durationMs).isLessThan(10000);

@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-@Profile("!test")
 public class JpaUserCouponRepository implements UserCouponRepository {
     
     private final JdbcTemplate jdbcTemplate;

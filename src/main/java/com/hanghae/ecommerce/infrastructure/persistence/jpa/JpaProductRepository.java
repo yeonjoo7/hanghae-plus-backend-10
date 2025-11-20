@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-@Profile("!test")
 public class JpaProductRepository implements ProductRepository {
     
     private final JdbcTemplate jdbcTemplate;

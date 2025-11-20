@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-@Profile("!test")
 public class JpaPaymentRepository implements PaymentRepository {
     
     private final JdbcTemplate jdbcTemplate;
