@@ -1,10 +1,10 @@
 package com.hanghae.ecommerce.concurrency;
 
-import com.hanghae.ecommerce.application.service.CouponService;
-import com.hanghae.ecommerce.application.service.OrderService;
-import com.hanghae.ecommerce.application.service.PaymentService;
-import com.hanghae.ecommerce.application.service.PopularProductService;
-import com.hanghae.ecommerce.application.service.StockService;
+import com.hanghae.ecommerce.application.coupon.CouponService;
+import com.hanghae.ecommerce.application.order.OrderService;
+import com.hanghae.ecommerce.application.payment.PaymentService;
+import com.hanghae.ecommerce.application.cart.PopularProductService;
+import com.hanghae.ecommerce.application.product.StockService;
 import com.hanghae.ecommerce.domain.coupon.Coupon;
 import com.hanghae.ecommerce.domain.coupon.DiscountPolicy;
 import com.hanghae.ecommerce.domain.coupon.repository.CouponRepository;

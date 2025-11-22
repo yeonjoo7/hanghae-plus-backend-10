@@ -1,11 +1,15 @@
 package com.hanghae.ecommerce.domain.user;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
 import java.util.Objects;
 
 /**
  * 포인트를 나타내는 Value Object
  */
+@Embeddable
 public class Point {
+    @Column(name = "value")
     private final int value;
 
     private Point(int value) {
@@ -93,8 +97,10 @@ public class Point {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Point point = (Point) o;
         return value == point.value;
     }

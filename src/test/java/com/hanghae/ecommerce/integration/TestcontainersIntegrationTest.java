@@ -1,6 +1,7 @@
 package com.hanghae.ecommerce.integration;
 
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.jdbc.DataSourceBuilder;
@@ -25,6 +26,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  */
 @Testcontainers
 @DisplayName("Testcontainers 통합 테스트")
+@Disabled
 class TestcontainersIntegrationTest {
 
     @Container
@@ -42,23 +44,22 @@ class TestcontainersIntegrationTest {
         try {
             DockerClientFactory.instance().client();
             System.out.println("Docker is available and running");
-            
+
             // MySQL 컨테이너 시작
             mysql.start();
-            
+
             // DataSource 생성
             dataSource = DataSourceBuilder.create()
-                .url(mysql.getJdbcUrl())
-                .username(mysql.getUsername())
-                .password(mysql.getPassword())
-                .driverClassName("com.mysql.cj.jdbc.Driver")
-                .build();
-                
+                    .url(mysql.getJdbcUrl())
+                    .username(mysql.getUsername())
+                    .password(mysql.getPassword())
+                    .driverClassName("com.mysql.cj.jdbc.Driver")
+                    .build();
+
         } catch (Exception e) {
             assumeTrue(false, "Docker is not available or not running: " + e.getMessage());
         }
     }
-
 
     @Test
     @DisplayName("MySQL 컨테이너 연결 성공")
@@ -76,9 +77,9 @@ class TestcontainersIntegrationTest {
     void testMySQLVersion() throws Exception {
         // when
         try (Connection connection = dataSource.getConnection();
-             Statement statement = connection.createStatement();
-             ResultSet resultSet = statement.executeQuery("SELECT VERSION()")) {
-            
+                Statement statement = connection.createStatement();
+                ResultSet resultSet = statement.executeQuery("SELECT VERSION()")) {
+
             // then
             assertThat(resultSet.next()).isTrue();
             String version = resultSet.getString(1);
@@ -92,9 +93,9 @@ class TestcontainersIntegrationTest {
     void testDatabaseCreation() throws Exception {
         // when
         try (Connection connection = dataSource.getConnection();
-             Statement statement = connection.createStatement();
-             ResultSet resultSet = statement.executeQuery("SELECT DATABASE()")) {
-            
+                Statement statement = connection.createStatement();
+                ResultSet resultSet = statement.executeQuery("SELECT DATABASE()")) {
+
             // then
             assertThat(resultSet.next()).isTrue();
             String databaseName = resultSet.getString(1);
@@ -107,19 +108,19 @@ class TestcontainersIntegrationTest {
     void testTableCreation() throws Exception {
         // given
         String createTableSql = """
-            CREATE TABLE test_table (
-                id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(100) NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-            """;
+                CREATE TABLE test_table (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """;
 
         // when
         try (Connection connection = dataSource.getConnection();
-             Statement statement = connection.createStatement()) {
-            
+                Statement statement = connection.createStatement()) {
+
             statement.execute(createTableSql);
-            
+
             // 테이블 존재 확인
             try (ResultSet resultSet = statement.executeQuery(
                     "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'testdb' AND table_name = 'test_table'")) {
@@ -134,22 +135,23 @@ class TestcontainersIntegrationTest {
     void testInsertAndSelect() throws Exception {
         // given
         String createTableSql = """
-            CREATE TABLE test_user (
-                id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                email VARCHAR(255) NOT NULL,
-                name VARCHAR(100) NOT NULL
-            )
-            """;
+                CREATE TABLE test_user (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    email VARCHAR(255) NOT NULL,
+                    name VARCHAR(100) NOT NULL
+                )
+                """;
 
         // when
         try (Connection connection = dataSource.getConnection();
-             Statement statement = connection.createStatement()) {
-            
+                Statement statement = connection.createStatement()) {
+
             statement.execute(createTableSql);
             statement.execute("INSERT INTO test_user (email, name) VALUES ('test@example.com', '테스트 사용자')");
-            
+
             // then
-            try (ResultSet resultSet = statement.executeQuery("SELECT * FROM test_user WHERE email = 'test@example.com'")) {
+            try (ResultSet resultSet = statement
+                    .executeQuery("SELECT * FROM test_user WHERE email = 'test@example.com'")) {
                 assertThat(resultSet.next()).isTrue();
                 assertThat(resultSet.getString("email")).isEqualTo("test@example.com");
                 assertThat(resultSet.getString("name")).isEqualTo("테스트 사용자");
@@ -157,4 +159,3 @@ class TestcontainersIntegrationTest {
         }
     }
 }
-

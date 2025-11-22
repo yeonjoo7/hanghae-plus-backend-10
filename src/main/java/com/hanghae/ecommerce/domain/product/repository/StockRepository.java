@@ -1,111 +1,101 @@
 package com.hanghae.ecommerce.domain.product.repository;
 
 import com.hanghae.ecommerce.domain.product.Stock;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * 재고 Repository 인터페이스
+ * 재고 Repository - Spring Data JPA
+ * 
+ * 비관적 락을 사용하여 동시성 제어
  */
-public interface StockRepository {
-    
+@Repository
+public interface StockRepository extends JpaRepository<Stock, Long> {
+
     /**
-     * 재고 저장
-     */
-    Stock save(Stock stock);
-    
-    /**
-     * ID로 재고 조회
-     */
-    Optional<Stock> findById(Long id);
-    
-    /**
-     * 상품 ID로 재고 조회 (상품 기본 재고)
+     * 상품 ID로 재고 조회
      */
     Optional<Stock> findByProductId(Long productId);
-    
+
     /**
-     * 상품 옵션 ID로 재고 조회 (상품 옵션 재고)
+     * 상품 옵션 ID로 재고 조회
+     */
+    Optional<Stock> findByProductOptionId(Long productOptionId);
+
+    /**
+     * 상품 ID와 옵션 ID로 재고 조회
      */
     Optional<Stock> findByProductIdAndProductOptionId(Long productId, Long productOptionId);
-    
+
     /**
-     * 상품 ID로 모든 재고 조회 (기본 재고 + 옵션 재고들)
+     * 비관적 락으로 재고 조회 (FOR UPDATE)
+     * 동시성 제어를 위한 핵심 메서드
      */
-    List<Stock> findAllByProductId(Long productId);
-    
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM Stock s WHERE s.id = :id")
+    Optional<Stock> findByIdForUpdate(@Param("id") Long id);
+
     /**
-     * 상품 옵션 재고만 조회
+     * 비관적 락으로 상품 ID로 재고 조회
      */
-    List<Stock> findByProductOptionIdIsNotNull();
-    
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM Stock s WHERE s.productId = :productId")
+    Optional<Stock> findByProductIdForUpdate(@Param("productId") Long productId);
+
     /**
-     * 상품 기본 재고만 조회 (옵션이 없는 재고)
+     * 비관적 락으로 상품 옵션 ID로 재고 조회
      */
-    List<Stock> findByProductOptionIdIsNull();
-    
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM Stock s WHERE s.productOptionId = :productOptionId")
+    Optional<Stock> findByProductOptionIdForUpdate(@Param("productOptionId") Long productOptionId);
+
     /**
-     * 재고가 부족한 상품 목록 조회 (임계값 이하)
+     * 상품 ID 목록으로 재고 조회
      */
-    List<Stock> findLowStockItems(int threshold);
-    
+    @Query("SELECT s FROM Stock s WHERE s.productId IN :productIds")
+    List<Stock> findByProductIdIn(@Param("productIds") List<Long> productIds);
+
     /**
-     * 재고가 없는 상품 목록 조회
+     * 상품 ID로 재고 조회 (옵션 없음)
      */
-    List<Stock> findOutOfStockItems();
-    
+    @Query("SELECT s FROM Stock s WHERE s.productId = :productId AND s.productOptionId IS NULL")
+    Optional<Stock> findByProductIdAndProductOptionIdIsNull(@Param("productId") Long productId);
+
     /**
-     * 모든 재고 조회
+     * 상품 ID 목록으로 재고 조회 (옵션 없음)
      */
-    List<Stock> findAll();
-    
+    @Query("SELECT s FROM Stock s WHERE s.productId IN :productIds AND s.productOptionId IS NULL")
+    List<Stock> findByProductIdInAndProductOptionIdIsNull(@Param("productIds") List<Long> productIds);
+
     /**
-     * 재고 존재 여부 확인
+     * 비관적 락으로 상품 ID로 재고 조회 (옵션 없음)
      */
-    boolean existsById(Long id);
-    
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM Stock s WHERE s.productId = :productId AND s.productOptionId IS NULL")
+    Optional<Stock> findByProductIdAndProductOptionIdIsNullForUpdate(@Param("productId") Long productId);
+
     /**
-     * 상품 재고 존재 여부 확인
+     * 재고 부족 상품 조회 (available_quantity < threshold)
      */
-    boolean existsByProductId(Long productId);
-    
+    @Query("SELECT s FROM Stock s WHERE s.availableQuantity.value < :threshold")
+    List<Stock> findLowStockProducts(@Param("threshold") int threshold);
+
     /**
-     * 상품 옵션 재고 존재 여부 확인
-     */
-    boolean existsByProductIdAndProductOptionId(Long productId, Long productOptionId);
-    
-    /**
-     * 재고 삭제
-     */
-    void deleteById(Long id);
-    
-    /**
-     * 특정 상품의 모든 재고 삭제
+     * 상품 ID로 재고 삭제 (테스트용)
      */
     void deleteByProductId(Long productId);
-    
-    /**
-     * 전체 재고 항목 수 조회
-     */
-    long count();
-    
-    /**
-     * 특정 상품의 재고 항목 수 조회
-     */
-    long countByProductId(Long productId);
-    
-    /**
-     * 상품 ID로 기본 재고 조회 (옵션이 없는 재고)
-     */
-    Optional<Stock> findByProductIdAndProductOptionIdIsNull(Long productId);
-    
-    /**
-     * 여러 상품 ID로 기본 재고 조회 (옵션이 없는 재고)
-     */
-    List<Stock> findByProductIdInAndProductOptionIdIsNull(List<Long> productIds);
-    
-    /**
-     * 상품 ID로 기본 재고 조회 (업데이트용 - 락 적용)
-     */
-    Optional<Stock> findByProductIdAndProductOptionIdIsNullForUpdate(Long productId);
+
+    // JpaRepository가 자동으로 제공:
+    // - Stock save(Stock stock)
+    // - Optional<Stock> findById(Long id)
+    // - List<Stock> findAll()
+    // - void deleteById(Long id)
+    // - long count()
 }

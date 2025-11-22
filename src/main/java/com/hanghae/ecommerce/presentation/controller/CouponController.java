@@ -1,6 +1,6 @@
 package com.hanghae.ecommerce.presentation.controller;
 
-import com.hanghae.ecommerce.application.service.CouponService;
+import com.hanghae.ecommerce.application.coupon.CouponService;
 import com.hanghae.ecommerce.presentation.dto.UserCouponDto;
 import com.hanghae.ecommerce.common.ApiResponse;
 import com.hanghae.ecommerce.presentation.dto.CouponUsageHistoryResponse;

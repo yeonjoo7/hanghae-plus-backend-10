@@ -1,6 +1,6 @@
 package com.hanghae.ecommerce.presentation.controller;
 
-import com.hanghae.ecommerce.application.service.UserService;
+import com.hanghae.ecommerce.application.user.UserService;
 import com.hanghae.ecommerce.common.ApiResponse;
 import com.hanghae.ecommerce.domain.payment.BalanceTransaction;
 import com.hanghae.ecommerce.domain.payment.TransactionType;

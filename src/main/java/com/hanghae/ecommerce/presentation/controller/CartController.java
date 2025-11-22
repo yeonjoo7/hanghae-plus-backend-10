@@ -1,9 +1,9 @@
 package com.hanghae.ecommerce.presentation.controller;
 
-import com.hanghae.ecommerce.application.service.CartService;
-import com.hanghae.ecommerce.application.service.CartService.CartInfo;
-import com.hanghae.ecommerce.application.service.CartService.CartItemInfo;
-import com.hanghae.ecommerce.application.service.StockService;
+import com.hanghae.ecommerce.application.cart.CartService;
+import com.hanghae.ecommerce.application.cart.CartService.CartInfo;
+import com.hanghae.ecommerce.application.cart.CartService.CartItemInfo;
+import com.hanghae.ecommerce.application.product.StockService;
 import com.hanghae.ecommerce.common.ApiResponse;
 import com.hanghae.ecommerce.domain.product.Stock;
 import com.hanghae.ecommerce.presentation.dto.*;

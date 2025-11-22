@@ -1,11 +1,15 @@
 package com.hanghae.ecommerce.domain.product;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
 import java.util.Objects;
 
 /**
  * 수량을 나타내는 Value Object
  */
+@Embeddable
 public class Quantity {
+    @Column(name = "value")
     private final int value;
 
     private Quantity(int value) {
@@ -100,8 +104,10 @@ public class Quantity {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Quantity quantity = (Quantity) o;
         return value == quantity.value;
     }

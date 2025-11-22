@@ -1,11 +1,15 @@
 package com.hanghae.ecommerce.domain.product;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
 import java.util.Objects;
 
 /**
  * 금액을 나타내는 Value Object
  */
+@Embeddable
 public class Money {
+    @Column(name = "amount")
     private final int amount;
 
     private Money(int amount) {
@@ -104,7 +108,7 @@ public class Money {
     public int getAmount() {
         return amount;
     }
-    
+
     /**
      * 금액 값 반환 (getValue 별칭)
      */
@@ -114,8 +118,10 @@ public class Money {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Money money = (Money) o;
         return amount == money.amount;
     }

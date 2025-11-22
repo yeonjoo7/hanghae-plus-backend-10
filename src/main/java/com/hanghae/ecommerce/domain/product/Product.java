@@ -1,23 +1,49 @@
 package com.hanghae.ecommerce.domain.product;
 
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
 /**
  * 상품 도메인 엔티티
  */
+@Entity
+@Table(name = "products")
 public class Product {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private final Long id;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "state", nullable = false, length = 20)
     private ProductState state;
+
+    @Column(name = "name", nullable = false, length = 200)
     private String name;
+
+    @Column(name = "description", columnDefinition = "TEXT")
     private String description;
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "amount", column = @Column(name = "price", nullable = false))
+    })
     private Money price;
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "value", column = @Column(name = "limited_quantity"))
+    })
     private Quantity limitedQuantity; // 1인당 구매 제한 수량
+
+    @Column(name = "created_at", nullable = false, updatable = false)
     private final LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    private Product(Long id, ProductState state, String name, String description, 
-                   Money price, Quantity limitedQuantity, LocalDateTime createdAt, LocalDateTime updatedAt) {
+    private Product(Long id, ProductState state, String name, String description,
+            Money price, Quantity limitedQuantity, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.state = state;
         this.name = name;
@@ -37,28 +63,27 @@ public class Product {
 
         LocalDateTime now = LocalDateTime.now();
         return new Product(
-            null,
-            ProductState.NORMAL,
-            name,
-            description,
-            price,
-            limitedQuantity,
-            now,
-            now
-        );
+                null,
+                ProductState.NORMAL,
+                name,
+                description,
+                price,
+                limitedQuantity,
+                now,
+                now);
     }
 
     /**
      * 기존 상품 복원 (DB에서 조회)
      */
     public static Product restore(Long id, ProductState state, String name, String description,
-                                 Money price, Quantity limitedQuantity, LocalDateTime createdAt, LocalDateTime updatedAt) {
+            Money price, Quantity limitedQuantity, LocalDateTime createdAt, LocalDateTime updatedAt) {
         if (id == null) {
             throw new IllegalArgumentException("상품 ID는 null일 수 없습니다.");
         }
         validateName(name);
         validatePrice(price);
-        
+
         if (state == null) {
             throw new IllegalArgumentException("상품 상태는 null일 수 없습니다.");
         }
@@ -171,19 +196,44 @@ public class Product {
     }
 
     // Getter 메서드들
-    public Long getId() { return id; }
-    public ProductState getState() { return state; }
-    public String getName() { return name; }
-    public String getDescription() { return description; }
-    public Money getPrice() { return price; }
-    public Quantity getLimitedQuantity() { return limitedQuantity; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public ProductState getState() {
+        return state;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public Money getPrice() {
+        return price;
+    }
+
+    public Quantity getLimitedQuantity() {
+        return limitedQuantity;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Product product = (Product) o;
         return Objects.equals(id, product.id);
     }

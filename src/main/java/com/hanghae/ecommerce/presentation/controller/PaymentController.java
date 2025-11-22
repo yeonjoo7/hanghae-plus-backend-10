@@ -1,6 +1,6 @@
 package com.hanghae.ecommerce.presentation.controller;
 
-import com.hanghae.ecommerce.application.service.PaymentService;
+import com.hanghae.ecommerce.application.payment.PaymentService;
 import com.hanghae.ecommerce.presentation.dto.PaymentResultDto;
 import com.hanghae.ecommerce.presentation.dto.UserCouponDto;
 import com.hanghae.ecommerce.common.ApiResponse;

@@ -1,5 +1,7 @@
 package com.hanghae.ecommerce.domain.order;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Objects;
@@ -8,8 +10,11 @@ import java.util.UUID;
 /**
  * 주문 번호를 나타내는 Value Object
  */
+@Embeddable
 public class OrderNumber {
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
+
+    @Column(name = "order_number", length = 50)
     private final String value;
 
     private OrderNumber(String value) {
@@ -53,8 +58,10 @@ public class OrderNumber {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         OrderNumber that = (OrderNumber) o;
         return Objects.equals(value, that.value);
     }

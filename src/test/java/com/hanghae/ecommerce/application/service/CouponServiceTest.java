@@ -10,7 +10,7 @@ import com.hanghae.ecommerce.domain.coupon.repository.UserCouponRepository;
 import com.hanghae.ecommerce.domain.product.Quantity;
 import com.hanghae.ecommerce.domain.user.User;
 import com.hanghae.ecommerce.domain.user.repository.UserRepository;
-import com.hanghae.ecommerce.infrastructure.service.CouponServiceImpl;
+import com.hanghae.ecommerce.application.coupon.CouponService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -1,6 +1,6 @@
 package com.hanghae.ecommerce.integration;
 
-import com.hanghae.ecommerce.application.service.OrderService;
+import com.hanghae.ecommerce.application.order.OrderService;
 import com.hanghae.ecommerce.domain.cart.Cart;
 import com.hanghae.ecommerce.domain.cart.CartItem;
 import com.hanghae.ecommerce.domain.cart.repository.CartItemRepository;
@@ -10,8 +10,8 @@ import com.hanghae.ecommerce.domain.order.Order;
 import com.hanghae.ecommerce.domain.payment.Payment;
 import com.hanghae.ecommerce.domain.payment.PaymentMethod;
 import com.hanghae.ecommerce.domain.product.Quantity;
-import com.hanghae.ecommerce.infrastructure.service.CouponServiceImpl;
-import com.hanghae.ecommerce.infrastructure.service.PaymentServiceImpl;
+import com.hanghae.ecommerce.application.coupon.CouponService;
+import com.hanghae.ecommerce.application.payment.PaymentService;
 import com.hanghae.ecommerce.support.BaseIntegrationTest;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;

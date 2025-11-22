@@ -1,8 +1,8 @@
 package com.hanghae.ecommerce.presentation.controller;
 
-import com.hanghae.ecommerce.application.service.ProductService;
-import com.hanghae.ecommerce.application.service.ProductService.PopularProduct;
-import com.hanghae.ecommerce.application.service.ProductService.ProductWithStock;
+import com.hanghae.ecommerce.application.product.ProductService;
+import com.hanghae.ecommerce.application.product.ProductService.PopularProduct;
+import com.hanghae.ecommerce.application.product.ProductService.ProductWithStock;
 import com.hanghae.ecommerce.common.ApiResponse;
 import com.hanghae.ecommerce.domain.product.Product;
 import com.hanghae.ecommerce.domain.product.ProductState;

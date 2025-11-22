@@ -1,6 +1,6 @@
 package com.hanghae.ecommerce.concurrency;
 
-import com.hanghae.ecommerce.application.service.StockService;
+import com.hanghae.ecommerce.application.product.StockService;
 import com.hanghae.ecommerce.domain.product.Product;
 import com.hanghae.ecommerce.domain.product.ProductState;
 import com.hanghae.ecommerce.domain.product.Quantity;

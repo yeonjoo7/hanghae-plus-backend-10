@@ -1,9 +1,9 @@
 package com.hanghae.ecommerce.presentation.controller;
 
-import com.hanghae.ecommerce.application.service.OrderService;
-import com.hanghae.ecommerce.application.service.OrderService.OrderInfo;
-import com.hanghae.ecommerce.application.service.OrderService.OrderSummary;
-import com.hanghae.ecommerce.application.service.OrderService.OrderItemInfo;
+import com.hanghae.ecommerce.application.order.OrderService;
+import com.hanghae.ecommerce.application.order.OrderService.OrderInfo;
+import com.hanghae.ecommerce.application.order.OrderService.OrderSummary;
+import com.hanghae.ecommerce.application.order.OrderService.OrderItemInfo;
 import com.hanghae.ecommerce.common.ApiResponse;
 import com.hanghae.ecommerce.domain.order.OrderState;
 import com.hanghae.ecommerce.presentation.dto.*;

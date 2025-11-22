@@ -1,27 +1,57 @@
 package com.hanghae.ecommerce.domain.coupon;
 
 import com.hanghae.ecommerce.domain.product.Quantity;
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
 /**
  * 쿠폰 도메인 엔티티
  */
+@Entity
+@Table(name = "coupons")
 public class Coupon {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private final Long id;
+
+    @Column(name = "name", nullable = false, length = 100)
     private String name;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
     private CouponState state;
+
+    @Embedded
     private DiscountPolicy discountPolicy;
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "value", column = @Column(name = "total_quantity", nullable = false))
+    })
     private Quantity totalQuantity;
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "value", column = @Column(name = "issued_quantity", nullable = false))
+    })
     private Quantity issuedQuantity;
+
+    @Column(name = "start_date", nullable = false)
     private LocalDateTime beginDate;
+
+    @Column(name = "end_date", nullable = false)
     private LocalDateTime endDate;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
     private final LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
     private Coupon(Long id, String name, CouponState state, DiscountPolicy discountPolicy,
-                  Quantity totalQuantity, Quantity issuedQuantity, LocalDateTime beginDate,
-                  LocalDateTime endDate, LocalDateTime createdAt, LocalDateTime updatedAt) {
+            Quantity totalQuantity, Quantity issuedQuantity, LocalDateTime beginDate,
+            LocalDateTime endDate, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.name = name;
         this.state = state;
@@ -38,7 +68,7 @@ public class Coupon {
      * 새로운 쿠폰 생성
      */
     public static Coupon create(String name, DiscountPolicy discountPolicy, Quantity totalQuantity,
-                               LocalDateTime beginDate, LocalDateTime endDate) {
+            LocalDateTime beginDate, LocalDateTime endDate) {
         validateName(name);
         validateDiscountPolicy(discountPolicy);
         validateTotalQuantity(totalQuantity);
@@ -46,25 +76,24 @@ public class Coupon {
 
         LocalDateTime now = LocalDateTime.now();
         return new Coupon(
-            null,
-            name,
-            CouponState.NORMAL,
-            discountPolicy,
-            totalQuantity,
-            Quantity.zero(),
-            beginDate,
-            endDate,
-            now,
-            now
-        );
+                null,
+                name,
+                CouponState.NORMAL,
+                discountPolicy,
+                totalQuantity,
+                Quantity.zero(),
+                beginDate,
+                endDate,
+                now,
+                now);
     }
 
     /**
      * 기존 쿠폰 복원 (DB에서 조회)
      */
     public static Coupon restore(Long id, String name, CouponState state, DiscountPolicy discountPolicy,
-                                Quantity totalQuantity, Quantity issuedQuantity, LocalDateTime beginDate,
-                                LocalDateTime endDate, LocalDateTime createdAt, LocalDateTime updatedAt) {
+            Quantity totalQuantity, Quantity issuedQuantity, LocalDateTime beginDate,
+            LocalDateTime endDate, LocalDateTime createdAt, LocalDateTime updatedAt) {
         if (id == null) {
             throw new IllegalArgumentException("쿠폰 ID는 null일 수 없습니다.");
         }
@@ -73,7 +102,7 @@ public class Coupon {
         validateTotalQuantity(totalQuantity);
         validateIssuedQuantity(issuedQuantity);
         validateDateRange(beginDate, endDate);
-        
+
         if (state == null) {
             throw new IllegalArgumentException("쿠폰 상태는 null일 수 없습니다.");
         }
@@ -85,14 +114,14 @@ public class Coupon {
         }
 
         return new Coupon(id, name, state, discountPolicy, totalQuantity, issuedQuantity,
-                         beginDate, endDate, createdAt, updatedAt);
+                beginDate, endDate, createdAt, updatedAt);
     }
 
     /**
      * 쿠폰 정보 수정
      */
     public void updateInfo(String name, DiscountPolicy discountPolicy, Quantity totalQuantity,
-                          LocalDateTime beginDate, LocalDateTime endDate) {
+            LocalDateTime beginDate, LocalDateTime endDate) {
         if (state == CouponState.DELETED) {
             throw new IllegalStateException("삭제된 쿠폰은 수정할 수 없습니다.");
         }
@@ -231,21 +260,52 @@ public class Coupon {
     }
 
     // Getter 메서드들
-    public Long getId() { return id; }
-    public String getName() { return name; }
-    public CouponState getState() { return state; }
-    public DiscountPolicy getDiscountPolicy() { return discountPolicy; }
-    public Quantity getTotalQuantity() { return totalQuantity; }
-    public Quantity getIssuedQuantity() { return issuedQuantity; }
-    public LocalDateTime getBeginDate() { return beginDate; }
-    public LocalDateTime getEndDate() { return endDate; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public CouponState getState() {
+        return state;
+    }
+
+    public DiscountPolicy getDiscountPolicy() {
+        return discountPolicy;
+    }
+
+    public Quantity getTotalQuantity() {
+        return totalQuantity;
+    }
+
+    public Quantity getIssuedQuantity() {
+        return issuedQuantity;
+    }
+
+    public LocalDateTime getBeginDate() {
+        return beginDate;
+    }
+
+    public LocalDateTime getEndDate() {
+        return endDate;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Coupon coupon = (Coupon) o;
         return Objects.equals(id, coupon.id);
     }

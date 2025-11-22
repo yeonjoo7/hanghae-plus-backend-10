@@ -1,6 +1,6 @@
 package com.hanghae.ecommerce.concurrency;
 
-import com.hanghae.ecommerce.application.service.CouponService;
+import com.hanghae.ecommerce.application.coupon.CouponService;
 import com.hanghae.ecommerce.domain.coupon.Coupon;
 import com.hanghae.ecommerce.domain.coupon.CouponState;
 import com.hanghae.ecommerce.domain.coupon.DiscountPolicy;
@@ -14,7 +14,9 @@ import com.hanghae.ecommerce.domain.user.UserState;
 import com.hanghae.ecommerce.domain.user.UserType;
 import com.hanghae.ecommerce.domain.user.repository.UserRepository;
 import com.hanghae.ecommerce.infrastructure.lock.LockManager;
+import com.hanghae.ecommerce.support.BaseIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,9 +36,11 @@ import static org.assertj.core.api.Assertions.*;
 /**
  * 쿠폰 발급 동시성 제어 테스트
  * 
- * 선착순 쿠폰 발급에서 Race Condition이 발생하지 않는지 검증합니다.
+ * @deprecated 이 테스트는 인메모리 DB를 전제로 작성되어 MySQL 환경에서 실행되지 않습니다.
+ *             대신 {@link CouponIssuanceConcurrencyTest}를 사용하세요.
  */
-import com.hanghae.ecommerce.support.BaseIntegrationTest;
+@Disabled("MySQL 기반 새로운 테스트로 대체됨 - CouponIssuanceConcurrencyTest 참조")
+@DisplayName("쿠폰 발급 동시성 테스트 (DEPRECATED)")
 
 class CouponConcurrencyTest extends BaseIntegrationTest {
 
@@ -55,34 +59,50 @@ class CouponConcurrencyTest extends BaseIntegrationTest {
     @Autowired
     private LockManager lockManager;
 
+    @Autowired
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
     private Coupon testCoupon;
     private List<User> testUsers;
 
     @BeforeEach
-    void setUp() {
-        // 락 매니저 정리
-        lockManager.clearAllLocks();
+    void setUp() throws InterruptedException {
+        org.springframework.transaction.TransactionStatus status = transactionManager.getTransaction(
+                new org.springframework.transaction.support.DefaultTransactionDefinition());
+        try {
+            // 락 매니저 정리
+            lockManager.clearAllLocks();
 
-        // 고유한 타임스탬프로 테스트 데이터 생성
-        long timestamp = System.currentTimeMillis();
+            // 고유한 타임스탬프로 테스트 데이터 생성
+            long timestamp = System.currentTimeMillis();
 
-        // 테스트 쿠폰 생성 (선착순 100명)
-        testCoupon = Coupon.create(
-                "선착순 10% 할인 쿠폰 " + timestamp,
-                DiscountPolicy.rate(10),
-                Quantity.of(100),
-                LocalDateTime.now().minusHours(1),
-                LocalDateTime.now().plusDays(7));
-        testCoupon = couponRepository.save(testCoupon);
+            // 테스트 쿠폰 생성 (선착순 100명)
+            testCoupon = Coupon.create(
+                    "선착순 10% 할인 쿠폰 " + timestamp,
+                    DiscountPolicy.rate(10),
+                    Quantity.of(100),
+                    LocalDateTime.now().minusHours(1),
+                    LocalDateTime.now().plusDays(7));
+            testCoupon = couponRepository.save(testCoupon);
 
-        // 테스트 사용자 생성 (1000명)
-        testUsers = new ArrayList<>();
-        for (int i = 1; i <= 1000; i++) {
-            User user = User.create(
-                    "user" + i + "_" + timestamp + "@test.com",
-                    "테스트유저" + i,
-                    "010-" + String.format("%04d", i) + "-5678");
-            testUsers.add(userRepository.save(user));
+            // 테스트 사용자 생성 (1000명)
+            testUsers = new ArrayList<>();
+            for (int i = 1; i <= 1000; i++) {
+                User user = User.create(
+                        "user" + i + "_" + timestamp + "@test.com",
+                        "테스트유저" + i,
+                        "010-" + String.format("%04d", i) + "-5678");
+                testUsers.add(userRepository.save(user));
+            }
+
+            // 명시적으로 트랜잭션 커밋하여 데이터를 DB에 반영
+            transactionManager.commit(status);
+
+            // 데이터가 모든 커넥션에 보이도록 잠시 대기
+            Thread.sleep(100);
+        } catch (Exception e) {
+            transactionManager.rollback(status);
+            throw e;
         }
     }
 
@@ -122,6 +142,7 @@ class CouponConcurrencyTest extends BaseIntegrationTest {
 
                 } catch (Exception e) {
                     failureCount.incrementAndGet();
+                    e.printStackTrace(); // DEBUG
                     synchronized (exceptions) {
                         exceptions.add(e);
                     }

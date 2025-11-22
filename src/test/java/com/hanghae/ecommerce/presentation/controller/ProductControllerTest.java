@@ -1,7 +1,7 @@
 package com.hanghae.ecommerce.presentation.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hanghae.ecommerce.application.service.ProductService;
+import com.hanghae.ecommerce.application.product.ProductService;
 import com.hanghae.ecommerce.domain.product.Money;
 import com.hanghae.ecommerce.domain.product.Product;
 import com.hanghae.ecommerce.domain.product.Quantity;

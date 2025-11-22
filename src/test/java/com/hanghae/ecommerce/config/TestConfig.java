@@ -16,7 +16,7 @@ public class TestConfig {
   @Bean
   @Primary
   public LockManager lockManager() {
-    return new TestLockManager();
+    return new com.hanghae.ecommerce.infrastructure.lock.ReentrantLockManager();
   }
 
   /**

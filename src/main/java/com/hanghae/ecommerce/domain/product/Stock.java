@@ -1,23 +1,48 @@
 package com.hanghae.ecommerce.domain.product;
 
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
 /**
  * 재고 도메인 엔티티
  */
+@Entity
+@Table(name = "stocks")
 public class Stock {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private final Long id;
+
+    @Column(name = "product_id", nullable = false)
     private final Long productId;
+
+    @Column(name = "product_option_id")
     private final Long productOptionId; // nullable
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "value", column = @Column(name = "available_quantity", nullable = false))
+    })
     private Quantity availableQuantity;
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "value", column = @Column(name = "sold_quantity", nullable = false))
+    })
     private Quantity soldQuantity;
+
+    @Column(name = "memo", length = 500)
     private String memo;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
     private final LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    private Stock(Long id, Long productId, Long productOptionId, Quantity availableQuantity, 
-                 Quantity soldQuantity, String memo, LocalDateTime createdAt, LocalDateTime updatedAt) {
+    private Stock(Long id, Long productId, Long productOptionId, Quantity availableQuantity,
+            Quantity soldQuantity, String memo, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.productId = productId;
         this.productOptionId = productOptionId;
@@ -37,52 +62,50 @@ public class Stock {
 
         LocalDateTime now = LocalDateTime.now();
         return new Stock(
-            null,
-            productId,
-            null,
-            initialQuantity,
-            Quantity.zero(),
-            memo,
-            now,
-            now
-        );
+                null,
+                productId,
+                null,
+                initialQuantity,
+                Quantity.zero(),
+                memo,
+                now,
+                now);
     }
 
     /**
      * 새로운 재고 생성 (상품 옵션용)
      */
-    public static Stock createForProductOption(Long productId, Long productOptionId, 
-                                             Quantity initialQuantity, String memo) {
+    public static Stock createForProductOption(Long productId, Long productOptionId,
+            Quantity initialQuantity, String memo) {
         validateProductId(productId);
         validateProductOptionId(productOptionId);
         validateQuantity(initialQuantity);
 
         LocalDateTime now = LocalDateTime.now();
         return new Stock(
-            null,
-            productId,
-            productOptionId,
-            initialQuantity,
-            Quantity.zero(),
-            memo,
-            now,
-            now
-        );
+                null,
+                productId,
+                productOptionId,
+                initialQuantity,
+                Quantity.zero(),
+                memo,
+                now,
+                now);
     }
 
     /**
      * 기존 재고 복원 (DB에서 조회)
      */
-    public static Stock restore(Long id, Long productId, Long productOptionId, 
-                              Quantity availableQuantity, Quantity soldQuantity, String memo,
-                              LocalDateTime createdAt, LocalDateTime updatedAt) {
+    public static Stock restore(Long id, Long productId, Long productOptionId,
+            Quantity availableQuantity, Quantity soldQuantity, String memo,
+            LocalDateTime createdAt, LocalDateTime updatedAt) {
         if (id == null) {
             throw new IllegalArgumentException("재고 ID는 null일 수 없습니다.");
         }
         validateProductId(productId);
         validateQuantity(availableQuantity);
         validateQuantity(soldQuantity);
-        
+
         if (createdAt == null) {
             throw new IllegalArgumentException("생성일시는 null일 수 없습니다.");
         }
@@ -115,8 +138,8 @@ public class Stock {
             throw new IllegalArgumentException("차감할 재고는 0보다 커야 합니다.");
         }
         if (!availableQuantity.isGreaterThanOrEqual(quantity)) {
-            throw new IllegalArgumentException("재고가 부족합니다. 요청: " + quantity.getValue() + 
-                                             ", 사용가능: " + availableQuantity.getValue());
+            throw new IllegalArgumentException("재고가 부족합니다. 요청: " + quantity.getValue() +
+                    ", 사용가능: " + availableQuantity.getValue());
         }
 
         this.availableQuantity = this.availableQuantity.subtract(quantity);
@@ -133,8 +156,8 @@ public class Stock {
             throw new IllegalArgumentException("복원할 재고는 0보다 커야 합니다.");
         }
         if (!soldQuantity.isGreaterThanOrEqual(quantity)) {
-            throw new IllegalArgumentException("복원할 재고가 판매된 수량보다 클 수 없습니다. 요청: " + quantity.getValue() + 
-                                             ", 판매됨: " + soldQuantity.getValue());
+            throw new IllegalArgumentException("복원할 재고가 판매된 수량보다 클 수 없습니다. 요청: " + quantity.getValue() +
+                    ", 판매됨: " + soldQuantity.getValue());
         }
 
         this.availableQuantity = this.availableQuantity.add(quantity);
@@ -201,19 +224,44 @@ public class Stock {
     }
 
     // Getter 메서드들
-    public Long getId() { return id; }
-    public Long getProductId() { return productId; }
-    public Long getProductOptionId() { return productOptionId; }
-    public Quantity getAvailableQuantity() { return availableQuantity; }
-    public Quantity getSoldQuantity() { return soldQuantity; }
-    public String getMemo() { return memo; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public Long getProductId() {
+        return productId;
+    }
+
+    public Long getProductOptionId() {
+        return productOptionId;
+    }
+
+    public Quantity getAvailableQuantity() {
+        return availableQuantity;
+    }
+
+    public Quantity getSoldQuantity() {
+        return soldQuantity;
+    }
+
+    public String getMemo() {
+        return memo;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Stock stock = (Stock) o;
         return Objects.equals(id, stock.id);
     }

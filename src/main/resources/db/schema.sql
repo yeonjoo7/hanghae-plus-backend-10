@@ -1,3 +1,21 @@
+SET FOREIGN_KEY_CHECKS = 0;
+
+DROP TABLE IF EXISTS popular_products_cache;
+DROP TABLE IF EXISTS data_transmissions;
+DROP TABLE IF EXISTS stock_movements;
+DROP TABLE IF EXISTS balance_transactions;
+DROP TABLE IF EXISTS payments;
+DROP TABLE IF EXISTS order_items;
+DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS cart_items;
+DROP TABLE IF EXISTS carts;
+DROP TABLE IF EXISTS user_coupons;
+DROP TABLE IF EXISTS coupons;
+DROP TABLE IF EXISTS product_options;
+DROP TABLE IF EXISTS stocks;
+DROP TABLE IF EXISTS products;
+DROP TABLE IF EXISTS users;
+
 -- 사용자 테이블
 CREATE TABLE IF NOT EXISTS users (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -223,3 +241,5 @@ CREATE TABLE IF NOT EXISTS popular_products_cache (
     INDEX idx_calculated_ranking (calculated_at, ranking),
     INDEX idx_period (period_start, period_end)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+SET FOREIGN_KEY_CHECKS = 1;
