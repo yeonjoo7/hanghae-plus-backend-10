@@ -1,58 +1,151 @@
 package com.hanghae.ecommerce.presentation.controller.payment;
 
+import com.hanghae.ecommerce.application.payment.PaymentService;
+import com.hanghae.ecommerce.presentation.dto.PaymentResultDto;
+import com.hanghae.ecommerce.presentation.dto.UserCouponDto;
 import com.hanghae.ecommerce.common.ApiResponse;
-import com.hanghae.ecommerce.presentation.dto.payment.PaymentRequest;
+import com.hanghae.ecommerce.domain.payment.PaymentMethod;
+import com.hanghae.ecommerce.presentation.dto.PaymentRequest;
+import com.hanghae.ecommerce.presentation.dto.PaymentResponse;
+import com.hanghae.ecommerce.presentation.exception.*;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
+import jakarta.validation.Valid;
 import java.util.List;
-import java.util.Map;
+import java.util.stream.Collectors;
 
+/**
+ * 결제 관련 API 컨트롤러
+ */
 @RestController
-@RequestMapping("/v1/orders")
+@RequestMapping("/orders")
+@RequiredArgsConstructor
 public class PaymentController {
 
+    private final PaymentService paymentService;
+
+    // TODO: 현재는 임시로 userId를 1L로 고정. 실제로는 인증된 사용자 정보에서 가져와야 함
+    private static final Long CURRENT_USER_ID = 1L;
+
+    /**
+     * 주문 결제
+     * POST /orders/{orderId}/payment
+     */
     @PostMapping("/{orderId}/payment")
-    public ApiResponse<Map<String, Object>> processPayment(
+    public ApiResponse<PaymentResponse> processPayment(
             @PathVariable Long orderId,
-            @RequestBody PaymentRequest request) {
+            @Valid @RequestBody PaymentRequest request) {
+        try {
+            PaymentMethod paymentMethod = parsePaymentMethod(request.getPaymentMethod());
 
-        // Mock 결제 처리
-        Map<String, Object> response = new HashMap<>();
-        response.put("paymentId", 1L);
-        response.put("orderId", orderId);
-        response.put("orderNumber", "ORD-20251031-" + orderId);
-        response.put("paymentMethod", request.getPaymentMethod());
-        response.put("originalAmount", 3000000);
-        response.put("discountAmount", 300000);
-        response.put("finalAmount", 2700000);
+            PaymentResultDto paymentResult = paymentService.processPayment(
+                    CURRENT_USER_ID,
+                    orderId,
+                    paymentMethod,
+                    request.getCouponIds());
 
-        // 적용된 쿠폰 목록
-        List<Map<String, Object>> appliedCoupons = new ArrayList<>();
-        if (request.getCouponIds() != null && !request.getCouponIds().isEmpty()) {
-            for (Long couponId : request.getCouponIds()) {
-                Map<String, Object> coupon = new HashMap<>();
-                coupon.put("couponId", couponId);
-                coupon.put("couponName", "할인 쿠폰 " + couponId);
-                coupon.put("couponType", "CART");
-                coupon.put("discountAmount", 150000);
-                appliedCoupons.add(coupon);
+            PaymentResponse response = toPaymentResponse(paymentResult);
+            return ApiResponse.success(response, "결제가 완료되었습니다");
+
+        } catch (IllegalArgumentException e) {
+            if (e.getMessage().contains("주문을 찾을 수 없습니다")) {
+                throw new OrderNotFoundException(orderId);
+            } else if (e.getMessage().contains("잔액이 부족합니다")) {
+                // 메시지에서 필요 금액과 현재 잔액을 파싱해서 예외에 전달
+                // 간단한 구현으로 기본값 사용
+                throw new InsufficientBalanceException(100000, 50000);
+            } else if (e.getMessage().contains("사용할 수 없는 쿠폰입니다")) {
+                // 쿠폰 관련 예외 처리는 더 구체적으로 구현 필요
+                throw e;
+            }
+            throw e;
+        } catch (IllegalStateException e) {
+            if (e.getMessage().contains("이미 결제가 완료된 주문입니다")) {
+                throw new PaymentAlreadyCompletedException();
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * PaymentResult를 PaymentResponse로 변환
+     */
+    private PaymentResponse toPaymentResponse(PaymentResultDto paymentResult) {
+        List<PaymentResponse.AppliedCouponResponse> appliedCoupons = paymentResult.getAppliedCoupons().stream()
+                .map(this::toAppliedCouponResponse)
+                .collect(Collectors.toList());
+
+        PaymentResponse.BalanceResponse balance = new PaymentResponse.BalanceResponse(
+                paymentResult.getBalanceInfo().getBefore().getValue(),
+                paymentResult.getBalanceInfo().getAfter().getValue(),
+                paymentResult.getBalanceInfo().getUsed().getValue());
+
+        return new PaymentResponse(
+                Long.valueOf(paymentResult.getPaymentId()),
+                paymentResult.getOrder().getId(),
+                paymentResult.getOrderNumber(),
+                paymentResult.getPayment().getMethod().name(),
+                paymentResult.getOrder().getTotalAmount().getValue(),
+                paymentResult.getOrder().getDiscountAmount().getValue(),
+                paymentResult.getFinalAmount().getValue(),
+                appliedCoupons,
+                balance,
+                paymentResult.getPayment().getState().name(),
+                paymentResult.getPayment().getPaidAt());
+    }
+
+    /**
+     * UserCouponInfo를 AppliedCouponResponse로 변환
+     */
+    private PaymentResponse.AppliedCouponResponse toAppliedCouponResponse(UserCouponDto couponInfo) {
+        // 쿠폰 타입에 따른 적용 상품 ID 설정
+        Long appliedProductId = null;
+        if ("CART_ITEM".equals(couponInfo.getCoupon().getDiscountPolicy().getType().name())) {
+            List<Long> productIds = couponInfo.getCoupon().getDiscountPolicy().getApplicableProductIds();
+            if (productIds != null && !productIds.isEmpty()) {
+                appliedProductId = productIds.get(0); // 첫 번째 상품 ID를 사용 (단순화)
             }
         }
-        response.put("appliedCoupons", appliedCoupons);
 
-        // 잔액 정보
-        Map<String, Integer> balance = new HashMap<>();
-        balance.put("before", 5000000);
-        balance.put("after", 2300000);
-        balance.put("used", 2700000);
-        response.put("balance", balance);
+        // 할인 금액 계산 (단순화 - 실제로는 더 복잡한 로직 필요)
+        int discountAmount = calculateDiscountAmount(couponInfo);
 
-        response.put("status", "COMPLETED");
-        response.put("paidAt", LocalDateTime.now());
+        return new PaymentResponse.AppliedCouponResponse(
+                couponInfo.getCoupon().getId(),
+                couponInfo.getCoupon().getName(),
+                couponInfo.getCoupon().getDiscountPolicy().getType().name(),
+                discountAmount,
+                appliedProductId);
+    }
 
-        return ApiResponse.success(response, "결제가 완료되었습니다");
+    /**
+     * 할인 금액 계산 (단순화된 버전)
+     */
+    private int calculateDiscountAmount(UserCouponDto couponInfo) {
+        // 실제로는 주문 금액과 쿠폰 정책을 기반으로 계산해야 함
+        // 여기서는 단순화된 버전으로 구현
+        int discountValue = couponInfo.getCoupon().getDiscountPolicy().getDiscountValue();
+
+        switch (couponInfo.getCoupon().getDiscountPolicy().getDiscountType()) {
+            case PERCENTAGE:
+                // 예시: 100,000원 주문에 10% 할인 = 10,000원
+                return 100000 * discountValue / 100;
+            case AMOUNT:
+                return discountValue;
+            default:
+                return 0;
+        }
+    }
+
+    /**
+     * 결제 수단 문자열을 PaymentMethod로 변환
+     */
+    private PaymentMethod parsePaymentMethod(String paymentMethodStr) {
+        try {
+            return PaymentMethod.valueOf(paymentMethodStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("지원하지 않는 결제 수단입니다: " + paymentMethodStr);
+        }
     }
 }

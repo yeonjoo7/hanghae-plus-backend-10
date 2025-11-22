@@ -6,7 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -14,7 +13,6 @@ import java.util.List;
 /**
  * 사용자 쿠폰 Repository - Spring Data JPA
  */
-@Repository
 public interface UserCouponRepository extends JpaRepository<UserCoupon, Long> {
 
     /**
@@ -40,19 +38,39 @@ public interface UserCouponRepository extends JpaRepository<UserCoupon, Long> {
     /**
      * 사용자의 사용 가능한 쿠폰 목록 조회
      */
-    @Query("SELECT uc FROM UserCoupon uc WHERE uc.userId = :userId AND uc.state = 'AVAILABLE' AND :now BETWEEN uc.issuedAt AND uc.expiredAt ORDER BY uc.expiredAt ASC")
+    /*
+     * @Query("SELECT uc FROM UserCoupon uc WHERE uc.userId = :userId AND uc.state = com.hanghae.ecommerce.domain.coupon.UserCouponState.AVAILABLE ORDER BY uc.issuedAt DESC"
+     * )
+     * List<UserCoupon> findAvailableCouponsByUserId(@Param("userId") Long userId);
+     * 
+     * @Query("SELECT uc FROM UserCoupon uc WHERE uc.userId = :userId AND uc.couponId = :couponId AND uc.state = com.hanghae.ecommerce.domain.coupon.UserCouponState.AVAILABLE"
+     * )
+     * Optional<UserCoupon> findAvailableCoupon(@Param("userId") Long
+     * userId, @Param("couponId") Long couponId);
+     * 
+     * @Query("SELECT uc FROM UserCoupon uc WHERE uc.userId = :userId ORDER BY uc.issuedAt DESC"
+     * )
+     * List<UserCoupon> findByUserIdOrderByIssuedAtDesc(@Param("userId") Long
+     * userId);
+     * 
+     * @Query("SELECT COUNT(uc) > 0 FROM UserCoupon uc WHERE uc.userId = :userId AND uc.couponId = :couponId"
+     * )
+     * boolean existsByUserIdAndCouponId(@Param("userId") Long
+     * userId, @Param("couponId") Long couponId);
+     */
+    @Query("SELECT uc FROM UserCoupon uc WHERE uc.userId = :userId AND uc.state = com.hanghae.ecommerce.domain.coupon.UserCouponState.AVAILABLE AND :now BETWEEN uc.issuedAt AND uc.expiresAt ORDER BY uc.expiresAt ASC")
     List<UserCoupon> findAvailableCouponsByUserId(@Param("userId") Long userId, @Param("now") LocalDateTime now);
 
     /**
      * 사용자의 만료된 쿠폰 목록 조회
      */
-    @Query("SELECT uc FROM UserCoupon uc WHERE uc.userId = :userId AND uc.expiredAt < :now ORDER BY uc.expiredAt DESC")
+    @Query("SELECT uc FROM UserCoupon uc WHERE uc.userId = :userId AND uc.expiresAt < :now ORDER BY uc.expiresAt DESC")
     List<UserCoupon> findExpiredCouponsByUserId(@Param("userId") Long userId, @Param("now") LocalDateTime now);
 
     /**
      * 만료 예정 쿠폰 목록 조회 (특정 일수 이내)
      */
-    @Query("SELECT uc FROM UserCoupon uc WHERE uc.state = 'AVAILABLE' AND uc.expiredAt < :expiryThreshold ORDER BY uc.expiredAt ASC")
+    @Query("SELECT uc FROM UserCoupon uc WHERE uc.state = com.hanghae.ecommerce.domain.coupon.UserCouponState.AVAILABLE AND uc.expiresAt < :expiryThreshold ORDER BY uc.expiresAt ASC")
     List<UserCoupon> findExpiringCoupons(@Param("expiryThreshold") LocalDateTime expiryThreshold);
 
     /**
@@ -117,7 +135,7 @@ public interface UserCouponRepository extends JpaRepository<UserCoupon, Long> {
     /**
      * 만료된 사용 가능한 쿠폰 목록 조회
      */
-    @Query("SELECT uc FROM UserCoupon uc WHERE uc.state = 'AVAILABLE' AND uc.expiredAt < :now")
+    @Query("SELECT uc FROM UserCoupon uc WHERE uc.state = com.hanghae.ecommerce.domain.coupon.UserCouponState.AVAILABLE AND uc.expiresAt < :now")
     List<UserCoupon> findExpiredAvailableCoupons(@Param("now") LocalDateTime now);
 
     // Default method for backward compatibility

@@ -6,7 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -15,7 +14,6 @@ import java.util.Optional;
 /**
  * 주문 아이템 Repository - Spring Data JPA
  */
-@Repository
 public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
 
     /**
@@ -96,15 +94,19 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
     /**
      * 베스트셀러 상품 조회
      */
-    @Query("SELECT oi.productId as productId, SUM(oi.quantity.value) as totalQuantity, SUM(oi.totalAmount.amount) as totalAmount "
-            +
-            "FROM OrderItem oi " +
-            "WHERE oi.createdAt BETWEEN :startDate AND :endDate " +
-            "GROUP BY oi.productId " +
-            "ORDER BY SUM(oi.quantity.value) DESC")
-    List<ProductSalesProjection> findTopSellingProducts(
-            @Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate);
+    /*
+     * @Query("SELECT oi.productId as productId, SUM(oi.quantity.value) as totalQuantity, SUM(oi.totalAmount.amount) as totalAmount "
+     * +
+     * "FROM OrderItem oi " +
+     * "WHERE oi.createdAt BETWEEN :startDate AND :endDate " +
+     * "GROUP BY oi.productId " +
+     * "ORDER BY SUM(oi.quantity.value) DESC")
+     * List<ProductSalesProjection> findTopSellingProducts(
+     * 
+     * @Param("startDate") LocalDateTime startDate,
+     * 
+     * @Param("endDate") LocalDateTime endDate);
+     */
 
     /**
      * 상품 판매 정보 Projection

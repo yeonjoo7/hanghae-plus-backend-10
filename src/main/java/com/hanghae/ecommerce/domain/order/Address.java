@@ -10,13 +10,17 @@ import java.util.Objects;
 @Embeddable
 public class Address {
     @Column(name = "zip_code", length = 10)
-    private final String zipCode;
+    private String zipCode;
 
     @Column(name = "address", length = 500)
-    private final String address;
+    private String address;
 
     @Column(name = "detail_address", length = 500)
-    private final String detailAddress;
+    private String detailAddress;
+
+    // JPA를 위한 기본 생성자
+    protected Address() {
+    }
 
     private Address(String zipCode, String address, String detailAddress) {
         this.zipCode = zipCode;

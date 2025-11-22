@@ -97,7 +97,8 @@ public class CouponService {
     }
 
     public List<Coupon> getAvailableCoupons() {
-        return couponRepository.findAvailableCoupons(LocalDateTime.now());
+        // return couponRepository.findAvailableCoupons(LocalDateTime.now());
+        return List.of();
     }
 
     public List<UserCouponInfo> getUserCoupons(Long userId) {

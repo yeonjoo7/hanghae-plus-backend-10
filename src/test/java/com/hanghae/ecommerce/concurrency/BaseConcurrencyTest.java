@@ -16,7 +16,6 @@ import com.hanghae.ecommerce.domain.user.repository.UserRepository;
 import com.hanghae.ecommerce.support.BaseIntegrationTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
@@ -27,7 +26,6 @@ import java.util.List;
  * MySQL 기반 동시성 테스트를 위한 베이스 클래스
  * MockMvc를 사용하여 실제 HTTP API 엔드포인트를 테스트합니다.
  */
-@SpringBootTest
 @AutoConfigureMockMvc
 public abstract class BaseConcurrencyTest extends BaseIntegrationTest {
 

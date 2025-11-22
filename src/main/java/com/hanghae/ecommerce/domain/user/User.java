@@ -18,10 +18,10 @@ public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private final Long id;
+    private Long id;
 
     @Column(name = "email", nullable = false, unique = true, length = 255)
-    private final String email;
+    private String email;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "state", nullable = false, length = 20)
@@ -29,7 +29,7 @@ public class User {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 20)
-    private final UserType type;
+    private UserType type;
 
     @Column(name = "name", nullable = false, length = 100)
     private String name;
@@ -50,10 +50,18 @@ public class User {
     private Point usedPoint;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private final LocalDateTime createdAt;
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    protected User() {
+        // JPA를 위한 기본 생성자
+        this.id = null;
+        this.email = null;
+        this.type = UserType.CUSTOMER;
+        this.createdAt = LocalDateTime.now();
+    }
 
     private User(Long id, String email, UserState state, UserType type, String name,
             String phone, Point availablePoint, Point usedPoint,

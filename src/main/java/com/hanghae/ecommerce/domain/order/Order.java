@@ -1,30 +1,79 @@
 package com.hanghae.ecommerce.domain.order;
 
 import com.hanghae.ecommerce.domain.product.Money;
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
 /**
  * 주문 도메인 엔티티
  */
+@Entity
+@Table(name = "orders")
 public class Order {
-    private final Long id;
-    private final Long userId;
-    private final Long userCouponId; // nullable
-    private final Long cartId; // nullable
-    private final OrderNumber orderNumber;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
+    @Column(name = "user_coupon_id")
+    private Long userCouponId; // nullable
+
+    @Column(name = "cart_id")
+    private Long cartId; // nullable
+
+    @Embedded
+    private OrderNumber orderNumber;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "state", nullable = false)
     private OrderState state;
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "amount", column = @Column(name = "amount", nullable = false))
+    })
     private Money amount; // 총 상품 금액
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "amount", column = @Column(name = "discount_amount", nullable = false))
+    })
     private Money discountAmount; // 총 할인 금액
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "amount", column = @Column(name = "total_amount", nullable = false))
+    })
     private Money totalAmount; // 최종 결제 금액
+
+    @Embedded
     private Recipient recipient;
+
+    @Embedded
     private Address address;
-    private final LocalDateTime createdAt;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    protected Order() {
+        // JPA를 위한 기본 생성자
+        this.id = null;
+        this.userId = null;
+        this.userCouponId = null;
+        this.cartId = null;
+        this.orderNumber = null;
+        this.createdAt = LocalDateTime.now();
+    }
+
     private Order(Long id, Long userId, Long userCouponId, Long cartId, OrderNumber orderNumber,
-                 OrderState state, Money amount, Money discountAmount, Money totalAmount,
-                 Recipient recipient, Address address, LocalDateTime createdAt, LocalDateTime updatedAt) {
+            OrderState state, Money amount, Money discountAmount, Money totalAmount,
+            Recipient recipient, Address address, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.userId = userId;
         this.userCouponId = userCouponId;
@@ -44,7 +93,7 @@ public class Order {
      * 새로운 주문 생성
      */
     public static Order create(Long userId, Long userCouponId, Long cartId, Money amount,
-                              Money discountAmount, Recipient recipient, Address address) {
+            Money discountAmount, Recipient recipient, Address address) {
         validateUserId(userId);
         validateAmount(amount);
         validateDiscountAmount(discountAmount);
@@ -55,29 +104,28 @@ public class Order {
 
         LocalDateTime now = LocalDateTime.now();
         return new Order(
-            null,
-            userId,
-            userCouponId,
-            cartId,
-            OrderNumber.generate(),
-            OrderState.PENDING_PAYMENT,
-            amount,
-            discountAmount,
-            totalAmount,
-            recipient,
-            address,
-            now,
-            now
-        );
+                null,
+                userId,
+                userCouponId,
+                cartId,
+                OrderNumber.generate(),
+                OrderState.PENDING_PAYMENT,
+                amount,
+                discountAmount,
+                totalAmount,
+                recipient,
+                address,
+                now,
+                now);
     }
 
     /**
      * 기존 주문 복원 (DB에서 조회)
      */
     public static Order restore(Long id, Long userId, Long userCouponId, Long cartId,
-                               OrderNumber orderNumber, OrderState state, Money amount,
-                               Money discountAmount, Money totalAmount, Recipient recipient,
-                               Address address, LocalDateTime createdAt, LocalDateTime updatedAt) {
+            OrderNumber orderNumber, OrderState state, Money amount,
+            Money discountAmount, Money totalAmount, Recipient recipient,
+            Address address, LocalDateTime createdAt, LocalDateTime updatedAt) {
         if (id == null) {
             throw new IllegalArgumentException("주문 ID는 null일 수 없습니다.");
         }
@@ -89,7 +137,7 @@ public class Order {
         validateTotalAmount(totalAmount);
         validateRecipient(recipient);
         validateAddress(address);
-        
+
         if (createdAt == null) {
             throw new IllegalArgumentException("생성일시는 null일 수 없습니다.");
         }
@@ -98,7 +146,7 @@ public class Order {
         }
 
         return new Order(id, userId, userCouponId, cartId, orderNumber, state, amount,
-                        discountAmount, totalAmount, recipient, address, createdAt, updatedAt);
+                discountAmount, totalAmount, recipient, address, createdAt, updatedAt);
     }
 
     /**
@@ -249,20 +297,58 @@ public class Order {
     }
 
     // Getter 메서드들
-    public Long getId() { return id; }
-    public Long getUserId() { return userId; }
-    public Long getUserCouponId() { return userCouponId; }
-    public Long getCartId() { return cartId; }
-    public OrderNumber getOrderNumber() { return orderNumber; }
-    public OrderState getState() { return state; }
-    public Money getAmount() { return amount; }
-    public Money getDiscountAmount() { return discountAmount; }
-    public Money getTotalAmount() { return totalAmount; }
-    public Recipient getRecipient() { return recipient; }
-    public Address getAddress() { return address; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    
+    public Long getId() {
+        return id;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public Long getUserCouponId() {
+        return userCouponId;
+    }
+
+    public Long getCartId() {
+        return cartId;
+    }
+
+    public OrderNumber getOrderNumber() {
+        return orderNumber;
+    }
+
+    public OrderState getState() {
+        return state;
+    }
+
+    public Money getAmount() {
+        return amount;
+    }
+
+    public Money getDiscountAmount() {
+        return discountAmount;
+    }
+
+    public Money getTotalAmount() {
+        return totalAmount;
+    }
+
+    public Recipient getRecipient() {
+        return recipient;
+    }
+
+    public Address getAddress() {
+        return address;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
     /**
      * 최종 금액 조회 (getTotalAmount의 별칭)
      */
@@ -272,8 +358,10 @@ public class Order {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Order order = (Order) o;
         return Objects.equals(id, order.id);
     }

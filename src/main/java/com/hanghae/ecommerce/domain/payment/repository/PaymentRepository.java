@@ -7,7 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -15,7 +14,6 @@ import java.util.List;
 /**
  * 결제 Repository - Spring Data JPA
  */
-@Repository
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     /**
@@ -41,31 +39,40 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     /**
      * 결제 대기 중인 결제 목록 조회
      */
-    @Query("SELECT p FROM Payment p WHERE p.state = 'PENDING' ORDER BY p.createdAt DESC")
+    /*
+     * @Query("SELECT p FROM Payment p WHERE p.orderId = :orderId AND p.state = com.hanghae.ecommerce.domain.payment.PaymentState.PENDING"
+     * )
+     * Optional<Payment> findPendingPaymentByOrderId(@Param("orderId") Long
+     * orderId);
+     * 
+     * @Query("SELECT p FROM Payment p WHERE p.orderId = :orderId")
+     * Optional<Payment> findByOrderId(@Param("orderId") Long orderId);
+     */
+    @Query("SELECT p FROM Payment p WHERE p.state = com.hanghae.ecommerce.domain.payment.PaymentState.PENDING ORDER BY p.createdAt DESC")
     List<Payment> findPendingPayments();
 
     /**
      * 완료된 결제 목록 조회
      */
-    @Query("SELECT p FROM Payment p WHERE p.state = 'COMPLETED' ORDER BY p.createdAt DESC")
+    @Query("SELECT p FROM Payment p WHERE p.state = com.hanghae.ecommerce.domain.payment.PaymentState.COMPLETED ORDER BY p.createdAt DESC")
     List<Payment> findCompletedPayments();
 
     /**
      * 실패한 결제 목록 조회
      */
-    @Query("SELECT p FROM Payment p WHERE p.state = 'FAILED' ORDER BY p.createdAt DESC")
+    @Query("SELECT p FROM Payment p WHERE p.state = com.hanghae.ecommerce.domain.payment.PaymentState.FAILED ORDER BY p.createdAt DESC")
     List<Payment> findFailedPayments();
 
     /**
      * 만료된 결제 목록 조회
      */
-    @Query("SELECT p FROM Payment p WHERE p.state = 'PENDING' AND p.createdAt < :now")
+    @Query("SELECT p FROM Payment p WHERE p.state = com.hanghae.ecommerce.domain.payment.PaymentState.PENDING AND p.createdAt < :now")
     List<Payment> findExpiredPayments(@Param("now") LocalDateTime now);
 
     /**
      * 만료 예정 결제 목록 조회
      */
-    @Query("SELECT p FROM Payment p WHERE p.state = 'PENDING' AND p.createdAt < :expiryThreshold")
+    @Query("SELECT p FROM Payment p WHERE p.state = com.hanghae.ecommerce.domain.payment.PaymentState.PENDING AND p.createdAt < :expiryThreshold")
     List<Payment> findExpiringPayments(@Param("expiryThreshold") LocalDateTime expiryThreshold);
 
     /**

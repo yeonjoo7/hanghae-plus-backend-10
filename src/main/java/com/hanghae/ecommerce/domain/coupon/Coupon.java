@@ -13,13 +13,13 @@ import java.util.Objects;
 public class Coupon {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private final Long id;
+    private Long id;
 
     @Column(name = "name", nullable = false, length = 100)
     private String name;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "state", nullable = false, length = 20)
     private CouponState state;
 
     @Embedded
@@ -44,10 +44,16 @@ public class Coupon {
     private LocalDateTime endDate;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private final LocalDateTime createdAt;
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    protected Coupon() {
+        // JPA를 위한 기본 생성자
+        this.id = null;
+        this.createdAt = LocalDateTime.now();
+    }
 
     private Coupon(Long id, String name, CouponState state, DiscountPolicy discountPolicy,
             Quantity totalQuantity, Quantity issuedQuantity, LocalDateTime beginDate,

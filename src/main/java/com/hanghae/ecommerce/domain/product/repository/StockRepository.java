@@ -5,7 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 import jakarta.persistence.LockModeType;
 import java.util.List;
@@ -16,7 +15,6 @@ import java.util.Optional;
  * 
  * 비관적 락을 사용하여 동시성 제어
  */
-@Repository
 public interface StockRepository extends JpaRepository<Stock, Long> {
 
     /**
@@ -84,8 +82,10 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     /**
      * 재고 부족 상품 조회 (available_quantity < threshold)
      */
-    @Query("SELECT s FROM Stock s WHERE s.availableQuantity.value < :threshold")
-    List<Stock> findLowStockProducts(@Param("threshold") int threshold);
+    /*
+     * @Query("SELECT s FROM Stock s WHERE s.availableQuantity.value < :threshold")
+     * List<Stock> findLowStockProducts(@Param("threshold") int threshold);
+     */
 
     /**
      * 상품 ID로 재고 삭제 (테스트용)

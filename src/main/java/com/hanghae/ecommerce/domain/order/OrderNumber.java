@@ -15,7 +15,11 @@ public class OrderNumber {
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     @Column(name = "order_number", length = 50)
-    private final String value;
+    private String value;
+
+    // JPA를 위한 기본 생성자
+    protected OrderNumber() {
+    }
 
     private OrderNumber(String value) {
         validateOrderNumber(value);

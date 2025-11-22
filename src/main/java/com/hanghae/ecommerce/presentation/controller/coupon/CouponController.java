@@ -1,85 +1,199 @@
 package com.hanghae.ecommerce.presentation.controller.coupon;
 
+import com.hanghae.ecommerce.application.coupon.CouponService;
+import com.hanghae.ecommerce.presentation.dto.UserCouponDto;
 import com.hanghae.ecommerce.common.ApiResponse;
+import com.hanghae.ecommerce.presentation.dto.CouponUsageHistoryResponse;
+import com.hanghae.ecommerce.domain.coupon.UserCoupon;
+import com.hanghae.ecommerce.domain.coupon.UserCouponInfo;
+import com.hanghae.ecommerce.domain.coupon.UserCouponState;
+import com.hanghae.ecommerce.presentation.dto.IssueCouponResponse;
+import com.hanghae.ecommerce.presentation.dto.MyCouponResponse;
+import com.hanghae.ecommerce.presentation.exception.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
+/**
+ * 쿠폰 관련 API 컨트롤러
+ */
 @RestController
-@RequestMapping("/v1/coupons")
+@RequestMapping("/coupons")
+@RequiredArgsConstructor
 public class CouponController {
 
-    private final Map<Long, Map<String, Object>> userCoupons = new HashMap<>();
-    private final AtomicLong userCouponIdGenerator = new AtomicLong(1);
+    private final CouponService couponService;
 
+    // TODO: 현재는 임시로 userId를 1L로 고정. 실제로는 인증된 사용자 정보에서 가져와야 함
+    private static final Long CURRENT_USER_ID = 1L;
+
+    /**
+     * 쿠폰 발급
+     * POST /coupons/{couponId}/issue
+     */
     @PostMapping("/{couponId}/issue")
-    public ApiResponse<Map<String, Object>> issueCoupon(@PathVariable Long couponId) {
-        Long userCouponId = userCouponIdGenerator.getAndIncrement();
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<IssueCouponResponse> issueCoupon(@PathVariable Long couponId) {
+        try {
+            UserCoupon userCoupon = couponService.issueCoupon(CURRENT_USER_ID, couponId);
+            UserCouponInfo couponInfo = couponService.getUserCoupon(CURRENT_USER_ID, userCoupon.getId());
 
-        Map<String, Object> coupon = new HashMap<>();
-        coupon.put("userCouponId", userCouponId);
-        coupon.put("couponId", couponId);
-        coupon.put("couponName", "신규 가입 10% 할인");
-        coupon.put("couponType", "CART");
-        coupon.put("discountType", "PERCENTAGE");
-        coupon.put("discountValue", 10);
-        coupon.put("minOrderAmount", 50000);
-        coupon.put("expiresAt", LocalDateTime.now().plusMonths(2));
-        coupon.put("issuedAt", LocalDateTime.now());
-        coupon.put("status", "AVAILABLE");
+            IssueCouponResponse response = new IssueCouponResponse(
+                    couponInfo.getUserCouponId(),
+                    couponInfo.getCouponId(),
+                    couponInfo.getCouponName(),
+                    couponInfo.getCoupon().getDiscountPolicy().getType().name(),
+                    couponInfo.getCoupon().getDiscountPolicy().getDiscountType().name(),
+                    couponInfo.getCoupon().getDiscountPolicy().getDiscountValue(),
+                    couponInfo.getCoupon().getDiscountPolicy().hasMinOrderAmount()
+                            ? couponInfo.getCoupon().getDiscountPolicy().getMinOrderAmount().getValue()
+                            : 0,
+                    couponInfo.getUserCoupon().getExpirationDate(),
+                    couponInfo.getUserCoupon().getIssuedAt());
 
-        userCoupons.put(userCouponId, coupon);
+            return ApiResponse.success(response, "쿠폰이 발급되었습니다");
 
-        return ApiResponse.success(coupon, "쿠폰이 발급되었습니다");
+        } catch (IllegalArgumentException e) {
+            if (e.getMessage().contains("쿠폰을 찾을 수 없습니다")) {
+                throw new CouponNotFoundException(couponId);
+            }
+            throw e;
+        } catch (IllegalStateException e) {
+            if (e.getMessage().contains("이미 발급받은 쿠폰입니다")) {
+                throw new CouponAlreadyIssuedException();
+            } else if (e.getMessage().contains("쿠폰이 모두 소진되었습니다")) {
+                throw new CouponSoldOutException();
+            }
+            throw e;
+        }
     }
 
+    /**
+     * 보유 쿠폰 조회
+     * GET /coupons/my
+     */
     @GetMapping("/my")
-    public ApiResponse<Map<String, Object>> getMyCoupons(
+    public ApiResponse<MyCouponResponse> getMyCoupons(
             @RequestParam(required = false) String status) {
 
-        List<Map<String, Object>> coupons = new ArrayList<>(userCoupons.values());
-
-        // 상태별 필터링
+        List<UserCouponInfo> couponInfos;
         if (status != null) {
-            coupons = coupons.stream()
-                    .filter(c -> status.equals(c.get("status")))
-                    .toList();
+            UserCouponState couponStatus = parseUserCouponStatus(status);
+            // 상태별 필터링 구현 필요 - 현재는 전체 조회 후 필터링
+            couponInfos = couponService.getUserCoupons(CURRENT_USER_ID)
+                    .stream()
+                    .filter(info -> info.getState() == couponStatus)
+                    .collect(Collectors.toList());
+        } else {
+            couponInfos = couponService.getUserCoupons(CURRENT_USER_ID);
         }
 
-        long availableCount = coupons.stream()
-                .filter(c -> "AVAILABLE".equals(c.get("status")))
+        List<MyCouponResponse.CouponResponse> coupons = couponInfos.stream()
+                .map(this::toCouponResponse)
+                .collect(Collectors.toList());
+
+        int totalCount = coupons.size();
+        int availableCount = (int) couponInfos.stream()
+                .filter(UserCouponInfo::canUse)
                 .count();
 
-        Map<String, Object> response = new HashMap<>();
-        response.put("coupons", coupons);
-        response.put("totalCount", coupons.size());
-        response.put("availableCount", availableCount);
-
+        MyCouponResponse response = new MyCouponResponse(coupons, totalCount, availableCount);
         return ApiResponse.success(response);
     }
 
+    /**
+     * 쿠폰 사용 이력 조회
+     * GET /coupons/usage-history
+     */
     @GetMapping("/usage-history")
-    public ApiResponse<Map<String, Object>> getCouponUsageHistory(
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size) {
+    public ApiResponse<CouponUsageHistoryResponse> getCouponUsageHistory(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
 
-        List<Map<String, Object>> usageHistory = new ArrayList<>();
+        // 기본값 설정
+        int pageNum = page != null ? page : 1;
+        int pageSize = size != null ? size : 20;
 
-        Map<String, Object> pagination = new HashMap<>();
-        pagination.put("currentPage", page);
-        pagination.put("totalPages", 1);
-        pagination.put("totalItems", usageHistory.size());
-        pagination.put("itemsPerPage", size);
+        List<UserCouponInfo> usageHistory = couponService.getCouponUsageHistory(CURRENT_USER_ID);
 
-        Map<String, Object> response = new HashMap<>();
-        response.put("usageHistory", usageHistory);
-        response.put("pagination", pagination);
+        // 페이징 처리 (간단한 구현)
+        int totalItems = usageHistory.size();
+        int totalPages = (int) Math.ceil((double) totalItems / pageSize);
+        int startIndex = (pageNum - 1) * pageSize;
+        int endIndex = Math.min(startIndex + pageSize, totalItems);
 
+        List<UserCouponInfo> paginatedHistory = usageHistory.subList(startIndex, endIndex);
+
+        List<CouponUsageHistoryResponse.UsageHistoryItem> items = paginatedHistory.stream()
+                .map(info -> new CouponUsageHistoryResponse.UsageHistoryItem(
+                        info.getUserCouponId(),
+                        info.getCouponName(),
+                        null, // orderId - 실제로는 쿠폰 사용 시점의 주문 정보를 저장해야 함
+                        null, // orderNumber
+                        50000, // discountAmount - 실제로는 계산된 할인 금액을 저장해야 함
+                        info.getUserCoupon().getUsedAt()))
+                .collect(Collectors.toList());
+
+        CouponUsageHistoryResponse.Pagination pagination = new CouponUsageHistoryResponse.Pagination(pageNum,
+                totalPages, totalItems, pageSize);
+
+        CouponUsageHistoryResponse response = new CouponUsageHistoryResponse(items, pagination);
         return ApiResponse.success(response);
+    }
+
+    /**
+     * UserCouponInfo를 CouponResponse로 변환
+     */
+    private MyCouponResponse.CouponResponse toCouponResponse(UserCouponInfo couponInfo) {
+        return new MyCouponResponse.CouponResponse(
+                couponInfo.getUserCouponId(),
+                couponInfo.getCouponId(),
+                couponInfo.getCouponName(),
+                couponInfo.getCoupon().getDiscountPolicy().getType().name(),
+                couponInfo.getCoupon().getDiscountPolicy().getDiscountType().name(),
+                couponInfo.getCoupon().getDiscountPolicy().getDiscountValue(),
+                couponInfo.getCoupon().getDiscountPolicy().hasMinOrderAmount()
+                        ? couponInfo.getCoupon().getDiscountPolicy().getMinOrderAmount().getValue()
+                        : 0,
+                couponInfo.getCoupon().getDiscountPolicy().getApplicableProductIds(),
+                mapUserCouponStatus(couponInfo.getState()),
+                couponInfo.getUserCoupon().getExpirationDate(),
+                couponInfo.getUserCoupon().getIssuedAt(),
+                couponInfo.getUserCoupon().getUsedAt());
+    }
+
+    /**
+     * 쿠폰 상태 문자열을 UserCouponState로 변환
+     */
+    private UserCouponState parseUserCouponStatus(String status) {
+        switch (status.toUpperCase()) {
+            case "AVAILABLE":
+                return UserCouponState.AVAILABLE;
+            case "USED":
+                return UserCouponState.USED;
+            case "EXPIRED":
+                return UserCouponState.EXPIRED;
+            default:
+                throw new IllegalArgumentException("유효하지 않은 쿠폰 상태입니다: " + status);
+        }
+    }
+
+    /**
+     * UserCouponState를 API 응답용 문자열로 변환
+     */
+    private String mapUserCouponStatus(UserCouponState state) {
+        switch (state) {
+            case AVAILABLE:
+                return "AVAILABLE";
+            case USED:
+                return "USED";
+            case EXPIRED:
+                return "EXPIRED";
+            default:
+                return state.name();
+        }
     }
 }

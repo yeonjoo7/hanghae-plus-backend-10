@@ -6,7 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -14,7 +13,6 @@ import java.util.List;
 /**
  * 잔액 거래 Repository - Spring Data JPA
  */
-@Repository
 public interface BalanceTransactionRepository extends JpaRepository<BalanceTransaction, Long> {
 
     /**
@@ -37,22 +35,41 @@ public interface BalanceTransactionRepository extends JpaRepository<BalanceTrans
      */
     List<BalanceTransaction> findByType(TransactionType type);
 
-    /**
-     * 충전 거래 목록 조회
-     */
-    @Query("SELECT bt FROM BalanceTransaction bt WHERE bt.type = 'CHARGE' ORDER BY bt.createdAt DESC")
-    List<BalanceTransaction> findChargeTransactions();
-
-    /**
-     * 결제 거래 목록 조회
-     */
-    @Query("SELECT bt FROM BalanceTransaction bt WHERE bt.type = 'PAYMENT' ORDER BY bt.createdAt DESC")
-    List<BalanceTransaction> findPaymentTransactions();
+    // /*
+    // // Original queries for charge and payment transactions
+    // // /**
+    // // * 충전 거래 목록 조회
+    // // */
+    // // @Query("SELECT bt FROM BalanceTransaction bt WHERE bt.type =
+    // com.hanghae.ecommerce.domain.payment.TransactionType.CHARGE ORDER BY
+    // bt.createdAt DESC")
+    // // List<BalanceTransaction> findChargeTransactions();
+    //
+    // // /**
+    // // * 결제 거래 목록 조회
+    // // */
+    // // @Query("SELECT bt FROM BalanceTransaction bt WHERE bt.type =
+    // com.hanghae.ecommerce.domain.payment.TransactionType.PAYMENT ORDER BY
+    // bt.createdAt DESC")
+    // // List<BalanceTransaction> findPaymentTransactions();
+    //
+    // // New queries to be commented out
+    // @Query("SELECT bt FROM BalanceTransaction bt WHERE bt.userId = :userId ORDER
+    // BY bt.createdAt DESC")
+    // List<BalanceTransaction> findByUserIdOrderByCreatedAtDesc(@Param("userId")
+    // Long userId);
+    //
+    // @Query("SELECT bt FROM BalanceTransaction bt WHERE bt.userId = :userId AND
+    // bt.type = com.hanghae.ecommerce.domain.payment.TransactionType.CHARGE ORDER
+    // BY bt.createdAt DESC")
+    // List<BalanceTransaction> findChargeHistoryByUserId(@Param("userId") Long
+    // userId);
+    // */
 
     /**
      * 환불 거래 목록 조회
      */
-    @Query("SELECT bt FROM BalanceTransaction bt WHERE bt.type = 'REFUND' ORDER BY bt.createdAt DESC")
+    @Query("SELECT bt FROM BalanceTransaction bt WHERE bt.type = com.hanghae.ecommerce.domain.payment.TransactionType.REFUND ORDER BY bt.createdAt DESC")
     List<BalanceTransaction> findRefundTransactions();
 
     /**

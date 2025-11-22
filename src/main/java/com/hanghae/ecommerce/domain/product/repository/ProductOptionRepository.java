@@ -6,14 +6,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
 /**
  * 상품 옵션 Repository - Spring Data JPA
  */
-@Repository
 public interface ProductOptionRepository extends JpaRepository<ProductOption, Long> {
 
     /**
@@ -34,14 +32,16 @@ public interface ProductOptionRepository extends JpaRepository<ProductOption, Lo
     /**
      * 사용 가능한 상품 옵션 목록 조회 (전체)
      */
-    @Query("SELECT po FROM ProductOption po WHERE po.state = 'NORMAL' ORDER BY po.createdAt DESC")
-    List<ProductOption> findAvailableOptions();
-
-    /**
-     * 특정 상품의 사용 가능한 옵션 목록 조회
+    /*
+     * @Query("SELECT po FROM ProductOption po WHERE po.state = com.hanghae.ecommerce.domain.product.ProductState.NORMAL ORDER BY po.createdAt DESC"
+     * )
+     * List<ProductOption> findAvailableOptions();
+     * 
+     * @Query("SELECT po FROM ProductOption po WHERE po.productId = :productId AND po.state = com.hanghae.ecommerce.domain.product.ProductState.NORMAL ORDER BY po.createdAt DESC"
+     * )
+     * List<ProductOption> findAvailableOptionsByProductId(@Param("productId") Long
+     * productId);
      */
-    @Query("SELECT po FROM ProductOption po WHERE po.productId = :productId AND po.state = 'NORMAL' ORDER BY po.createdAt DESC")
-    List<ProductOption> findAvailableOptionsByProductId(@Param("productId") Long productId);
 
     /**
      * 특정 상품에 옵션이 존재하는지 확인

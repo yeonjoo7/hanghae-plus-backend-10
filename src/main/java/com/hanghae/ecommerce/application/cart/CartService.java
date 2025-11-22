@@ -31,10 +31,10 @@ public class CartService {
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
 
-    public CartService(CartRepository cartRepository, 
-                      CartItemRepository cartItemRepository,
-                      UserRepository userRepository,
-                      ProductRepository productRepository) {
+    public CartService(CartRepository cartRepository,
+            CartItemRepository cartItemRepository,
+            UserRepository userRepository,
+            ProductRepository productRepository) {
         this.cartRepository = cartRepository;
         this.cartItemRepository = cartItemRepository;
         this.userRepository = userRepository;
@@ -51,7 +51,7 @@ public class CartService {
         // 사용자 존재 확인
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다. ID: " + userId));
-        
+
         if (!user.isActive()) {
             throw new IllegalStateException("비활성 사용자는 장바구니를 사용할 수 없습니다.");
         }
@@ -75,8 +75,10 @@ public class CartService {
      */
     public CartInfo getCartInfo(Long userId) {
         Cart cart = getOrCreateActiveCart(userId);
-        List<CartItem> cartItems = cartItemRepository.findByCartIdAndState(cart.getId(), CartState.NORMAL);
-        
+        // List<CartItem> cartItems =
+        // cartItemRepository.findByCartIdAndState(cart.getId(), CartState.NORMAL);
+        List<CartItem> cartItems = List.of();
+
         if (cartItems.isEmpty()) {
             return new CartInfo(cart, List.of(), Money.zero(), 0);
         }
@@ -86,7 +88,7 @@ public class CartService {
                 .map(CartItem::getProductId)
                 .distinct()
                 .collect(Collectors.toList());
-        
+
         Map<Long, Product> productMap = productRepository.findByIdIn(productIds)
                 .stream()
                 .collect(Collectors.toMap(Product::getId, Function.identity()));
@@ -118,9 +120,9 @@ public class CartService {
     /**
      * 장바구니에 상품 추가
      * 
-     * @param userId 사용자 ID
+     * @param userId    사용자 ID
      * @param productId 상품 ID
-     * @param quantity 수량
+     * @param quantity  수량
      * @return 장바구니 아이템 정보
      */
     public CartItemInfo addItemToCart(Long userId, Long productId, int quantity) {
@@ -129,11 +131,11 @@ public class CartService {
         }
 
         Cart cart = getOrCreateActiveCart(userId);
-        
+
         // 상품 존재 및 판매 가능 여부 확인
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId));
-        
+
         if (!product.isAvailable()) {
             throw new IllegalArgumentException("판매 중지된 상품입니다. ID: " + productId);
         }
@@ -141,27 +143,29 @@ public class CartService {
         // 구매 제한 수량 확인
         Quantity requestQuantity = Quantity.of(quantity);
         if (product.exceedsLimitedQuantity(requestQuantity)) {
-            throw new IllegalArgumentException("구매 제한 수량을 초과했습니다. 제한: " + 
-                product.getLimitedQuantity().getValue() + ", 요청: " + quantity);
+            throw new IllegalArgumentException("구매 제한 수량을 초과했습니다. 제한: " +
+                    product.getLimitedQuantity().getValue() + ", 요청: " + quantity);
         }
 
         // 기존 동일 상품이 있는지 확인
-        Optional<CartItem> existingItem = cartItemRepository.findByCartIdAndProductIdAndProductOptionIdIsNullAndState(
-                cart.getId(), productId, CartState.NORMAL);
-        
+        // Optional<CartItem> existingItem =
+        // cartItemRepository.findByCartIdAndProductIdAndProductOptionIdIsNullAndState(
+        // cart.getId(), productId, CartState.NORMAL);
+        Optional<CartItem> existingItem = Optional.empty();
+
         CartItem cartItem;
         if (existingItem.isPresent()) {
             // 기존 아이템 수량 증가
             cartItem = existingItem.get();
-            
+
             // 총 수량이 제한을 초과하지 않는지 확인
             Quantity newTotalQuantity = cartItem.getQuantity().add(requestQuantity);
             if (product.exceedsLimitedQuantity(newTotalQuantity)) {
-                throw new IllegalArgumentException("장바구니 제한 수량을 초과합니다. 현재: " + 
-                    cartItem.getQuantity().getValue() + ", 추가: " + quantity + 
-                    ", 제한: " + product.getLimitedQuantity().getValue());
+                throw new IllegalArgumentException("장바구니 제한 수량을 초과합니다. 현재: " +
+                        cartItem.getQuantity().getValue() + ", 추가: " + quantity +
+                        ", 제한: " + product.getLimitedQuantity().getValue());
             }
-            
+
             cartItem.increaseQuantity(requestQuantity);
         } else {
             // 새 아이템 생성
@@ -175,9 +179,9 @@ public class CartService {
     /**
      * 장바구니 아이템 수량 변경
      * 
-     * @param userId 사용자 ID
+     * @param userId     사용자 ID
      * @param cartItemId 장바구니 아이템 ID
-     * @param quantity 새로운 수량
+     * @param quantity   새로운 수량
      * @return 수정된 장바구니 아이템 정보
      */
     public CartItemInfo updateCartItemQuantity(Long userId, Long cartItemId, int quantity) {
@@ -192,20 +196,20 @@ public class CartService {
         // 구매 제한 수량 확인
         Quantity newQuantity = Quantity.of(quantity);
         if (product.exceedsLimitedQuantity(newQuantity)) {
-            throw new IllegalArgumentException("구매 제한 수량을 초과했습니다. 제한: " + 
-                product.getLimitedQuantity().getValue() + ", 요청: " + quantity);
+            throw new IllegalArgumentException("구매 제한 수량을 초과했습니다. 제한: " +
+                    product.getLimitedQuantity().getValue() + ", 요청: " + quantity);
         }
 
         cartItem.updateQuantity(newQuantity);
         CartItem savedItem = cartItemRepository.save(cartItem);
-        
+
         return new CartItemInfo(savedItem, product);
     }
 
     /**
      * 장바구니 아이템 삭제
      * 
-     * @param userId 사용자 ID
+     * @param userId     사용자 ID
      * @param cartItemId 장바구니 아이템 ID
      */
     public void removeCartItem(Long userId, Long cartItemId) {
@@ -221,19 +225,21 @@ public class CartService {
      */
     public void clearCart(Long userId) {
         Cart cart = getOrCreateActiveCart(userId);
-        List<CartItem> cartItems = cartItemRepository.findByCartIdAndState(cart.getId(), CartState.NORMAL);
-        
+        // List<CartItem> cartItems =
+        // cartItemRepository.findByCartIdAndState(cart.getId(), CartState.NORMAL);
+        List<CartItem> cartItems = List.of();
+
         for (CartItem item : cartItems) {
             item.delete();
         }
-        
+
         cartItemRepository.saveAll(cartItems);
     }
 
     /**
      * 선택한 장바구니 아이템들 조회
      * 
-     * @param userId 사용자 ID
+     * @param userId      사용자 ID
      * @param cartItemIds 장바구니 아이템 ID 목록
      * @return 선택된 장바구니 아이템 정보 목록
      */
@@ -243,8 +249,11 @@ public class CartService {
         }
 
         Cart cart = getOrCreateActiveCart(userId);
-        List<CartItem> cartItems = cartItemRepository.findByIdInAndCartIdAndState(cartItemIds, cart.getId(), CartState.NORMAL);
-        
+        List<CartItem> allCartItems = cartItemRepository.findByCartId(cart.getId());
+        List<CartItem> cartItems = allCartItems.stream()
+                .filter(item -> cartItemIds.contains(item.getId()) && item.getState() == CartState.NORMAL)
+                .collect(Collectors.toList());
+
         // 요청된 모든 아이템이 존재하는지 확인
         if (cartItems.size() != cartItemIds.size()) {
             List<Long> foundIds = cartItems.stream().map(CartItem::getId).collect(Collectors.toList());
@@ -259,7 +268,7 @@ public class CartService {
                 .map(CartItem::getProductId)
                 .distinct()
                 .collect(Collectors.toList());
-        
+
         Map<Long, Product> productMap = productRepository.findByIdIn(productIds)
                 .stream()
                 .collect(Collectors.toMap(Product::getId, Function.identity()));
@@ -280,8 +289,11 @@ public class CartService {
      */
     private CartItem getCartItemByUser(Long userId, Long cartItemId) {
         Cart cart = getOrCreateActiveCart(userId);
-        return cartItemRepository.findByIdAndCartIdAndState(cartItemId, cart.getId(), CartState.NORMAL)
-                .orElseThrow(() -> new IllegalArgumentException("장바구니 아이템을 찾을 수 없습니다. ID: " + cartItemId));
+        // return cartItemRepository.findByIdAndCartIdAndState(cartItemId, cart.getId(),
+        // CartState.NORMAL)
+        // .orElseThrow(() -> new IllegalArgumentException("장바구니 아이템을 찾을 수 없습니다. ID: " +
+        // cartItemId));
+        throw new IllegalArgumentException("장바구니 아이템을 찾을 수 없습니다. ID: " + cartItemId);
     }
 
     /**

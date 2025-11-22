@@ -5,7 +5,6 @@ import com.hanghae.ecommerce.domain.user.UserState;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
@@ -18,7 +17,6 @@ import java.util.Optional;
  * - 메서드 이름 기반 쿼리 자동 생성 (findByEmail, existsByEmail 등)
  * - 복잡한 쿼리는 @Query로 명시
  */
-@Repository
 public interface UserRepository extends JpaRepository<User, Long> {
 
     /**
@@ -43,8 +41,18 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * 활성 상태 사용자 목록 조회
      * JPQL을 사용한 커스텀 쿼리
      */
-    @Query("SELECT u FROM User u WHERE u.state = 'NORMAL'")
+    @Query("SELECT u FROM User u WHERE u.state = com.hanghae.ecommerce.domain.user.UserState.NORMAL")
     List<User> findActiveUsers();
+
+    /**
+     * 활성 상태 사용자 목록 조회
+     * JPQL을 사용한 커스텀 쿼리
+     */
+    /*
+     * @Query("SELECT u FROM User u WHERE u.email = :email AND u.state = com.hanghae.ecommerce.domain.user.UserState.NORMAL"
+     * )
+     * Optional<User> findActiveUserByEmail(@Param("email") String email);
+     */
 
     /**
      * 이메일 존재 여부 확인

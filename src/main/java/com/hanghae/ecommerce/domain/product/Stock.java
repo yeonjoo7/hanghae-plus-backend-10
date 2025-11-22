@@ -12,13 +12,13 @@ import java.util.Objects;
 public class Stock {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private final Long id;
+    private Long id;
 
     @Column(name = "product_id", nullable = false)
-    private final Long productId;
+    private Long productId;
 
     @Column(name = "product_option_id")
-    private final Long productOptionId; // nullable
+    private Long productOptionId; // nullable
 
     @Embedded
     @AttributeOverrides({
@@ -36,10 +36,18 @@ public class Stock {
     private String memo;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private final LocalDateTime createdAt;
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    protected Stock() {
+        // JPA를 위한 기본 생성자
+        this.id = null;
+        this.productId = null;
+        this.productOptionId = null;
+        this.createdAt = LocalDateTime.now();
+    }
 
     private Stock(Long id, Long productId, Long productOptionId, Quantity availableQuantity,
             Quantity soldQuantity, String memo, LocalDateTime createdAt, LocalDateTime updatedAt) {

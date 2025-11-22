@@ -10,7 +10,11 @@ import java.util.Objects;
 @Embeddable
 public class Quantity {
     @Column(name = "value")
-    private final int value;
+    private int value;
+
+    // JPA를 위한 기본 생성자
+    protected Quantity() {
+    }
 
     private Quantity(int value) {
         validateQuantity(value);

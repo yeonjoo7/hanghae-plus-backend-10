@@ -5,7 +5,6 @@ import com.hanghae.ecommerce.domain.product.ProductState;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
@@ -13,7 +12,6 @@ import java.util.Optional;
 /**
  * 상품 Repository - Spring Data JPA
  */
-@Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
     /**
@@ -29,8 +27,11 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     /**
      * 활성 상품 조회
      */
-    @Query("SELECT p FROM Product p WHERE p.state = 'NORMAL' ORDER BY p.createdAt DESC")
-    List<Product> findActiveProducts();
+    /*
+     * @Query("SELECT p FROM Product p WHERE p.state = com.hanghae.ecommerce.domain.product.ProductState.NORMAL ORDER BY p.createdAt DESC"
+     * )
+     * List<Product> findActiveProducts();
+     */
 
     /**
      * ID 목록으로 상품 조회
@@ -38,16 +39,13 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     List<Product> findByIdIn(List<Long> ids);
 
     /**
-     * 판매 가능한 상품 조회 (state = NORMAL)
-     */
-    @Query("SELECT p FROM Product p WHERE p.state = 'NORMAL' ORDER BY p.createdAt DESC")
-    List<Product> findByStateIsAvailable();
-
-    /**
      * 이름으로 검색 + 판매 가능한 상품만
      */
-    @Query("SELECT p FROM Product p WHERE p.name LIKE %:keyword% AND p.state = 'NORMAL' ORDER BY p.createdAt DESC")
-    List<Product> findByNameContainingAndStateIsAvailable(@Param("keyword") String keyword);
+    /*
+     * @Query("SELECT p FROM Product p WHERE p.name LIKE %:name% AND p.state = com.hanghae.ecommerce.domain.product.ProductState.NORMAL ORDER BY p.createdAt DESC"
+     * )
+     * List<Product> findActiveProductsByName(@Param("name") String name);
+     */
 
     /**
      * 상품명 존재 여부 확인

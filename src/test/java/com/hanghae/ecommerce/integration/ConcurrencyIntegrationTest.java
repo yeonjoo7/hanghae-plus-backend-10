@@ -161,7 +161,7 @@ class ConcurrencyIntegrationTest extends BaseIntegrationTest {
 
         // 재고 5개 상품 생성
         jdbcTemplate.update(
-                "INSERT INTO products(id, name, price, status) VALUES(?,'한정상품',10000,'NORMAL')",
+                "INSERT INTO products(id, name, price, state) VALUES(?,'한정상품',10000,'NORMAL')",
                 productId);
         // 재고 테이블에 재고 추가
         jdbcTemplate.update(
@@ -233,7 +233,7 @@ class ConcurrencyIntegrationTest extends BaseIntegrationTest {
 
         // 성공한 주문 수 확인
         Integer paidOrders = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM orders WHERE status='COMPLETED'",
+                "SELECT COUNT(*) FROM orders WHERE state='COMPLETED'",
                 Integer.class);
         assertThat(paidOrders).isEqualTo(5);
     }
@@ -261,7 +261,7 @@ class ConcurrencyIntegrationTest extends BaseIntegrationTest {
             final long currentProductId = productId + i;
             // 상품 생성
             jdbcTemplate.update(
-                    "INSERT INTO products(id, name, price, status) VALUES(?, ?, 10000, 'NORMAL')",
+                    "INSERT INTO products(id, name, price, state) VALUES(?, ?, 10000, 'NORMAL')",
                     currentProductId, "상품" + i);
             jdbcTemplate.update(
                     "INSERT INTO stocks(product_id, available_quantity) VALUES(?, 100)",

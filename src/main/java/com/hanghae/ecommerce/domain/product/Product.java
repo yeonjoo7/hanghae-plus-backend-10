@@ -12,7 +12,7 @@ import java.util.Objects;
 public class Product {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private final Long id;
+    private Long id;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "state", nullable = false, length = 20)
@@ -37,10 +37,16 @@ public class Product {
     private Quantity limitedQuantity; // 1인당 구매 제한 수량
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private final LocalDateTime createdAt;
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    protected Product() {
+        // JPA를 위한 기본 생성자
+        this.id = null;
+        this.createdAt = LocalDateTime.now();
+    }
 
     private Product(Long id, ProductState state, String name, String description,
             Money price, Quantity limitedQuantity, LocalDateTime createdAt, LocalDateTime updatedAt) {

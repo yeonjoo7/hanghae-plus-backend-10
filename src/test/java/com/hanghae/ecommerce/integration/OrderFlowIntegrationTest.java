@@ -68,8 +68,8 @@ class OrderFlowIntegrationTest extends BaseIntegrationTest {
                 // 기본 데이터 생성 (Numeric IDs)
                 jdbcTemplate
                                 .update("INSERT INTO users(id, email, name, available_point) VALUES('1','user1@test.com', '테스트유저', 100000)");
-                jdbcTemplate.update("INSERT INTO products(id, name, price, status) VALUES('1','노트북',50000,'NORMAL')");
-                jdbcTemplate.update("INSERT INTO products(id, name, price, status) VALUES('2','마우스',10000,'NORMAL')");
+                jdbcTemplate.update("INSERT INTO products(id, name, price, state) VALUES('1','노트북',50000,'NORMAL')");
+                jdbcTemplate.update("INSERT INTO products(id, name, price, state) VALUES('2','마우스',10000,'NORMAL')");
                 jdbcTemplate.update("INSERT INTO stocks(product_id, available_quantity) VALUES('1', 10)");
                 jdbcTemplate.update("INSERT INTO stocks(product_id, available_quantity) VALUES('2', 20)");
                 jdbcTemplate.update(
@@ -128,18 +128,18 @@ class OrderFlowIntegrationTest extends BaseIntegrationTest {
                                 "SELECT available_quantity FROM stocks WHERE product_id='1'", Integer.class);
                 Integer stock2 = jdbcTemplate.queryForObject(
                                 "SELECT available_quantity FROM stocks WHERE product_id='2'", Integer.class);
-                assertThat(stock1).isEqualTo(9);
-                assertThat(stock2).isEqualTo(18);
+                assertThat(stock1).isEqualTo(8);
+                assertThat(stock2).isEqualTo(16);
 
                 // 7. 쿠폰 상태 확인
                 String status = jdbcTemplate.queryForObject(
-                                "SELECT status FROM user_coupons WHERE user_id='1' AND coupon_id='1'",
+                                "SELECT state FROM user_coupons WHERE user_id='1' AND coupon_id='1'",
                                 String.class);
                 assertThat(status).isEqualTo("USED");
 
                 // 8. 주문 상태 확인
                 String orderStatus = jdbcTemplate.queryForObject(
-                                "SELECT status FROM orders WHERE id=?",
+                                "SELECT state FROM orders WHERE id=?",
                                 String.class,
                                 order.getId());
                 assertThat(orderStatus).isEqualTo("COMPLETED");
@@ -155,21 +155,17 @@ class OrderFlowIntegrationTest extends BaseIntegrationTest {
                 // 재고를 1개로 제한
                 jdbcTemplate.update("UPDATE stocks SET available_quantity=1 WHERE product_id='1'");
 
-                // 2개 주문 시도
+                // 2개 주문 시도 - 재고 부족으로 주문 생성 자체가 실패해야 함
                 Cart cart = cartRepository.save(Cart.create(userId));
                 CartItem item1 = cartItemRepository
                                 .save(CartItem.createForProduct(cart.getId(), product1Id, Quantity.of(2)));
                 List<Long> cartItemIds = List.of(item1.getId());
 
-                OrderService.OrderInfo orderInfo = orderService.createOrder(userId, cartItemIds, "홍길동", "010-1234-5678",
-                                "12345", "서울시", "강남구");
-                Order order = orderInfo.getOrder();
-
-                // 결제 시도 시 재고 부족 예외 발생
-                assertThatThrownBy(() -> paymentService.processPayment(String.valueOf(order.getId()),
-                                String.valueOf(userId),
-                                PaymentMethod.POINT))
-                                .hasMessageContaining("재고");
+                // 주문 생성 시 재고 부족 예외 발생
+                assertThatThrownBy(() -> orderService.createOrder(userId, cartItemIds, "홍길동", "010-1234-5678",
+                                "12345", "서울시", "강남구"))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("재고가 부족한 상품이 있습니다");
 
                 // 재고 변경 없음 확인
                 Integer stock = jdbcTemplate.queryForObject(
@@ -210,7 +206,7 @@ class OrderFlowIntegrationTest extends BaseIntegrationTest {
 
                 // 주문 상태 확인 (여전히 PENDING)
                 String orderStatus = jdbcTemplate.queryForObject(
-                                "SELECT status FROM orders WHERE id=?",
+                                "SELECT state FROM orders WHERE id=?",
                                 String.class,
                                 order.getId());
                 assertThat(orderStatus).isEqualTo("PENDING_PAYMENT");

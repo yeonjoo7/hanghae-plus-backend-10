@@ -5,11 +5,14 @@ import com.hanghae.ecommerce.application.cart.CartService.CartItemInfo;
 import com.hanghae.ecommerce.application.product.StockService;
 import com.hanghae.ecommerce.application.product.PopularProductService;
 import com.hanghae.ecommerce.application.coupon.CouponService;
+import com.hanghae.ecommerce.domain.coupon.repository.CouponRepository;
+import com.hanghae.ecommerce.domain.coupon.repository.UserCouponRepository;
 import com.hanghae.ecommerce.domain.cart.Cart;
 import com.hanghae.ecommerce.domain.cart.CartItem;
 import com.hanghae.ecommerce.domain.cart.repository.CartRepository;
 import com.hanghae.ecommerce.domain.coupon.Coupon;
 import com.hanghae.ecommerce.domain.coupon.UserCoupon;
+import com.hanghae.ecommerce.domain.coupon.UserCouponState;
 import com.hanghae.ecommerce.domain.order.Address;
 import com.hanghae.ecommerce.domain.order.Order;
 import com.hanghae.ecommerce.domain.order.OrderItem;
@@ -23,6 +26,7 @@ import com.hanghae.ecommerce.domain.product.Quantity;
 import com.hanghae.ecommerce.domain.user.User;
 import com.hanghae.ecommerce.domain.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -44,6 +48,8 @@ public class OrderService {
     private final UserRepository userRepository;
     private final CartRepository cartRepository;
     private final PopularProductService popularProductService;
+    private final CouponRepository couponRepository;
+    private final UserCouponRepository userCouponRepository;
 
     public OrderService(OrderRepository orderRepository,
             OrderItemRepository orderItemRepository,
@@ -51,7 +57,9 @@ public class OrderService {
             StockService stockService,
             UserRepository userRepository,
             CartRepository cartRepository,
-            PopularProductService popularProductService) {
+            PopularProductService popularProductService,
+            CouponRepository couponRepository,
+            UserCouponRepository userCouponRepository) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.cartService = cartService;
@@ -59,6 +67,8 @@ public class OrderService {
         this.userRepository = userRepository;
         this.cartRepository = cartRepository;
         this.popularProductService = popularProductService;
+        this.couponRepository = couponRepository;
+        this.userCouponRepository = userCouponRepository;
     }
 
     /**
@@ -73,6 +83,7 @@ public class OrderService {
      * @param detailAddress 상세 주소
      * @return 생성된 주문 정보
      */
+    @Transactional
     public OrderInfo createOrder(Long userId, List<Long> cartItemIds,
             String recipientName, String phone, String zipCode,
             String address, String detailAddress) {
@@ -103,24 +114,41 @@ public class OrderService {
         }
 
         // 총 주문 금액 계산
-        Money totalAmount = cartItemInfos.stream()
+        Money subtotalAmount = cartItemInfos.stream()
                 .map(CartItemInfo::getSubtotal)
                 .reduce(Money.zero(), Money::add);
+
+        // 장바구니 조회 (쿠폰 정보를 위해)
+        Cart cart = cartService.getOrCreateActiveCart(userId);
+
+        // 쿠폰 할인 계산
+        Money discountAmount = Money.zero();
+        if (cart.getUserCouponId() != null) {
+            UserCoupon userCoupon = userCouponRepository.findById(cart.getUserCouponId())
+                    .orElse(null);
+            if (userCoupon != null && userCoupon.getState() == UserCouponState.AVAILABLE) {
+                Coupon coupon = couponRepository.findById(userCoupon.getCouponId())
+                        .orElse(null);
+                if (coupon != null) {
+                    discountAmount = coupon.getDiscountPolicy().calculateDiscount(subtotalAmount);
+                }
+            }
+        }
+
+        // 최종 총 금액 계산 (소계 - 할인금액)
+        Money totalAmount = subtotalAmount.subtract(discountAmount);
 
         // 배송지 정보 생성
         Recipient recipient = Recipient.of(recipientName, phone);
         Address deliveryAddress = Address.of(zipCode, address, detailAddress);
-
-        // 장바구니 조회 (쿠폰 정보를 위해)
-        Cart cart = cartService.getOrCreateActiveCart(userId);
 
         // 주문 생성
         Order order = Order.create(
                 userId,
                 cart.getUserCouponId(),
                 cart.getId(),
-                totalAmount,
-                Money.zero(),
+                subtotalAmount,
+                discountAmount,
                 recipient,
                 deliveryAddress);
         Order savedOrder = orderRepository.save(order);
@@ -207,7 +235,8 @@ public class OrderService {
             orders = orderRepository.findByUserIdAndCreatedAtBetweenOrderByCreatedAtDesc(
                     userId, startDate, endDate);
         } else {
-            orders = orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
+            // orders = orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
+            orders = List.of();
         }
 
         return orders.stream()

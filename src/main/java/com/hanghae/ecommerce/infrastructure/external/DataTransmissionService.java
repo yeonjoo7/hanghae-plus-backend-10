@@ -101,7 +101,7 @@ public class DataTransmissionService {
         List<Map<String, Object>> pending = jdbcTemplate.queryForList(
                 """
                         SELECT * FROM data_transmissions
-                        WHERE status = 'PENDING' AND attempts < 3
+                        WHERE state = 'PENDING' AND attempts < 3
                         ORDER BY created_at
                         LIMIT 10
                         """);
@@ -121,7 +121,7 @@ public class DataTransmissionService {
 
                 // 성공 시 상태 업데이트
                 jdbcTemplate.update(
-                        "UPDATE data_transmissions SET status = 'SUCCESS', sent_at = NOW() WHERE id = ?",
+                        "UPDATE data_transmissions SET state = 'SUCCESS', sent_at = NOW() WHERE id = ?",
                         id);
 
             } catch (Exception e) {
@@ -134,7 +134,7 @@ public class DataTransmissionService {
                 Integer attempts = (Integer) transmission.get("attempts");
                 if (attempts != null && attempts >= 2) {
                     jdbcTemplate.update(
-                            "UPDATE data_transmissions SET status = 'FAILED', failed_at = NOW() WHERE id = ?",
+                            "UPDATE data_transmissions SET state = 'FAILED', failed_at = NOW() WHERE id = ?",
                             id);
                 }
             }

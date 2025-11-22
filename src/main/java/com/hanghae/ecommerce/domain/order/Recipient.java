@@ -14,10 +14,14 @@ public class Recipient {
             "^\\d{2,3}-\\d{3,4}-\\d{4}$");
 
     @Column(name = "recipient_name", length = 100)
-    private final String name;
+    private String name;
 
     @Column(name = "recipient_phone", length = 20)
-    private final String phone;
+    private String phone;
+
+    // JPA를 위한 기본 생성자
+    protected Recipient() {
+    }
 
     private Recipient(String name, String phone) {
         this.name = name;

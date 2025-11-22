@@ -141,20 +141,24 @@ public class ProductService {
         LocalDateTime startDate = endDate.minusDays(days);
 
         // 기간 내 상품별 판매 수량 조회
-        List<OrderItemRepository.ProductSalesProjection> salesData = orderItemRepository
-                .findTopSellingProducts(startDate, endDate);
-
-        if (salesData.isEmpty()) {
-            return List.of();
-        }
-
-        // limit 적용 및 ProductSalesInfo로 변환
-        List<ProductSalesInfo> salesInfoList = salesData.stream()
-                .limit(limit)
-                .map(projection -> new ProductSalesInfo(
-                        projection.getProductId(),
-                        projection.getTotalQuantity().intValue()))
-                .collect(Collectors.toList());
+        /*
+         * List<OrderItemRepository.ProductSalesProjection> salesData =
+         * orderItemRepository
+         * .findTopSellingProducts(startDate, endDate);
+         * 
+         * if (salesData.isEmpty()) {
+         * return List.of();
+         * }
+         * 
+         * // limit 적용 및 ProductSalesInfo로 변환
+         * List<ProductSalesInfo> salesInfoList = salesData.stream()
+         * .limit(limit)
+         * .map(projection -> new ProductSalesInfo(
+         * projection.getProductId(),
+         * projection.getTotalQuantity().intValue()))
+         * .collect(Collectors.toList());
+         */
+        List<ProductSalesInfo> salesInfoList = List.of(); // 임시 빈 리스트
 
         // 상품 ID 목록 추출
         List<Long> productIds = salesInfoList.stream()
@@ -185,7 +189,8 @@ public class ProductService {
      * @return 판매 가능한 상품 목록
      */
     public List<Product> getAvailableProducts() {
-        return productRepository.findByStateIsAvailable();
+        // return productRepository.findActiveProducts();
+        return List.of();
     }
 
     /**
@@ -199,7 +204,8 @@ public class ProductService {
             throw new IllegalArgumentException("검색 키워드는 필수입니다.");
         }
 
-        return productRepository.findByNameContainingAndStateIsAvailable(keyword.trim());
+        // return productRepository.findActiveProductsByName(keyword.trim());
+        return List.of();
     }
 
     /**

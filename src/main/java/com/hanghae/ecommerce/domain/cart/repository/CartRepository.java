@@ -5,7 +5,6 @@ import com.hanghae.ecommerce.domain.cart.CartState;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
@@ -13,7 +12,6 @@ import java.util.Optional;
 /**
  * 장바구니 Repository - Spring Data JPA
  */
-@Repository
 public interface CartRepository extends JpaRepository<Cart, Long> {
 
     /**
@@ -29,8 +27,15 @@ public interface CartRepository extends JpaRepository<Cart, Long> {
     /**
      * 활성 상태 장바구니 조회 (사용자별)
      */
-    @Query("SELECT c FROM Cart c WHERE c.userId = :userId AND c.state = 'ACTIVE'")
-    Optional<Cart> findActiveCartByUserId(@Param("userId") Long userId);
+    /*
+     * @Query("SELECT c FROM Cart c WHERE c.userId = :userId AND c.state = com.hanghae.ecommerce.domain.cart.CartState.NORMAL"
+     * )
+     * Optional<Cart> findActiveCartByUserId(@Param("userId") Long userId);
+     * 
+     * @Query("SELECT c FROM Cart c WHERE c.userId = :userId AND c.state = com.hanghae.ecommerce.domain.cart.CartState.NORMAL"
+     * )
+     * Optional<Cart> findByUserId(@Param("userId") Long userId);
+     */
 
     /**
      * 쿠폰이 적용된 장바구니 목록 조회
@@ -56,7 +61,7 @@ public interface CartRepository extends JpaRepository<Cart, Long> {
     /**
      * 활성 장바구니 존재 여부 확인 (사용자별)
      */
-    @Query("SELECT CASE WHEN COUNT(c) > 0 THEN true ELSE false END FROM Cart c WHERE c.userId = :userId AND c.state = 'ACTIVE'")
+    @Query("SELECT CASE WHEN COUNT(c) > 0 THEN true ELSE false END FROM Cart c WHERE c.userId = :userId AND c.state = com.hanghae.ecommerce.domain.cart.CartState.NORMAL")
     boolean existsActiveCartByUserId(@Param("userId") Long userId);
 
     /**

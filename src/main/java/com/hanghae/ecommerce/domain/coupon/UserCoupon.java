@@ -1,25 +1,56 @@
 package com.hanghae.ecommerce.domain.coupon;
 
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
 /**
  * 사용자 쿠폰 도메인 엔티티
  */
+@Entity
+@Table(name = "user_coupons")
 public class UserCoupon {
-    private final Long id;
-    private final Long userId;
-    private final Long couponId;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
+    @Column(name = "coupon_id", nullable = false)
+    private Long couponId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "state", nullable = false)
     private UserCouponState state;
-    private final LocalDateTime issuedAt;
+
+    @Column(name = "issued_at", nullable = false)
+    private LocalDateTime issuedAt;
+
+    @Column(name = "used_at")
     private LocalDateTime usedAt;
+
+    @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
-    private final LocalDateTime createdAt;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    protected UserCoupon() {
+        // JPA를 위한 기본 생성자
+        this.id = null;
+        this.userId = null;
+        this.couponId = null;
+        this.issuedAt = LocalDateTime.now();
+        this.createdAt = LocalDateTime.now();
+    }
+
     private UserCoupon(Long id, Long userId, Long couponId, UserCouponState state,
-                      LocalDateTime issuedAt, LocalDateTime usedAt, LocalDateTime expiresAt,
-                      LocalDateTime createdAt, LocalDateTime updatedAt) {
+            LocalDateTime issuedAt, LocalDateTime usedAt, LocalDateTime expiresAt,
+            LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.userId = userId;
         this.couponId = couponId;
@@ -41,31 +72,30 @@ public class UserCoupon {
 
         LocalDateTime now = LocalDateTime.now();
         return new UserCoupon(
-            null,
-            userId,
-            couponId,
-            UserCouponState.AVAILABLE,
-            now,
-            null,
-            expiresAt,
-            now,
-            now
-        );
+                null,
+                userId,
+                couponId,
+                UserCouponState.AVAILABLE,
+                now,
+                null,
+                expiresAt,
+                now,
+                now);
     }
 
     /**
      * 기존 사용자 쿠폰 복원 (DB에서 조회)
      */
     public static UserCoupon restore(Long id, Long userId, Long couponId, UserCouponState state,
-                                   LocalDateTime issuedAt, LocalDateTime usedAt, LocalDateTime expiresAt,
-                                   LocalDateTime createdAt, LocalDateTime updatedAt) {
+            LocalDateTime issuedAt, LocalDateTime usedAt, LocalDateTime expiresAt,
+            LocalDateTime createdAt, LocalDateTime updatedAt) {
         if (id == null) {
             throw new IllegalArgumentException("사용자 쿠폰 ID는 null일 수 없습니다.");
         }
         validateUserId(userId);
         validateCouponId(couponId);
         validateExpiresAt(expiresAt);
-        
+
         if (state == null) {
             throw new IllegalArgumentException("사용자 쿠폰 상태는 null일 수 없습니다.");
         }
@@ -154,7 +184,7 @@ public class UserCoupon {
             throw new IllegalStateException("사용된 쿠폰의 만료일은 연장할 수 없습니다.");
         }
         validateExpiresAt(newExpiresAt);
-        
+
         if (!newExpiresAt.isAfter(expiresAt)) {
             throw new IllegalArgumentException("새로운 만료일은 현재 만료일보다 이후여야 합니다.");
         }
@@ -187,16 +217,42 @@ public class UserCoupon {
     }
 
     // Getter 메서드들
-    public Long getId() { return id; }
-    public Long getUserId() { return userId; }
-    public Long getCouponId() { return couponId; }
-    public UserCouponState getState() { return state; }
-    public LocalDateTime getIssuedAt() { return issuedAt; }
-    public LocalDateTime getUsedAt() { return usedAt; }
-    public LocalDateTime getExpiresAt() { return expiresAt; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    
+    public Long getId() {
+        return id;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public Long getCouponId() {
+        return couponId;
+    }
+
+    public UserCouponState getState() {
+        return state;
+    }
+
+    public LocalDateTime getIssuedAt() {
+        return issuedAt;
+    }
+
+    public LocalDateTime getUsedAt() {
+        return usedAt;
+    }
+
+    public LocalDateTime getExpiresAt() {
+        return expiresAt;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
     /**
      * 남은 쿠폰 수량 (테스트용 - 실제로는 쿠폰 도메인에서 관리)
      */
@@ -205,7 +261,7 @@ public class UserCoupon {
         // 실제 비즈니스 로직에서는 Coupon 도메인에서 발급 수량을 관리합니다.
         return 99; // 임시 값
     }
-    
+
     /**
      * 만료일시 반환 (getExpirationDate 별칭)
      */
@@ -215,8 +271,10 @@ public class UserCoupon {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         UserCoupon that = (UserCoupon) o;
         return Objects.equals(id, that.id);
     }

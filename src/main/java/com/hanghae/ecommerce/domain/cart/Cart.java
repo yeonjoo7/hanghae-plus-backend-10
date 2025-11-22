@@ -1,21 +1,44 @@
 package com.hanghae.ecommerce.domain.cart;
 
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
 /**
  * 장바구니 도메인 엔티티
  */
+@Entity
+@Table(name = "carts")
 public class Cart {
-    private final Long id;
-    private final Long userId;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
+    @Column(name = "user_coupon_id")
     private Long userCouponId; // 적용된 사용자 쿠폰 ID
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "state", nullable = false)
     private CartState state;
-    private final LocalDateTime createdAt;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    protected Cart() {
+        // JPA를 위한 기본 생성자
+        this.id = null;
+        this.userId = null;
+        this.createdAt = LocalDateTime.now();
+    }
+
     private Cart(Long id, Long userId, Long userCouponId, CartState state,
-                LocalDateTime createdAt, LocalDateTime updatedAt) {
+            LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.userId = userId;
         this.userCouponId = userCouponId;
@@ -32,25 +55,24 @@ public class Cart {
 
         LocalDateTime now = LocalDateTime.now();
         return new Cart(
-            null,
-            userId,
-            null,
-            CartState.NORMAL,
-            now,
-            now
-        );
+                null,
+                userId,
+                null,
+                CartState.NORMAL,
+                now,
+                now);
     }
 
     /**
      * 기존 장바구니 복원 (DB에서 조회)
      */
     public static Cart restore(Long id, Long userId, Long userCouponId, CartState state,
-                              LocalDateTime createdAt, LocalDateTime updatedAt) {
+            LocalDateTime createdAt, LocalDateTime updatedAt) {
         if (id == null) {
             throw new IllegalArgumentException("장바구니 ID는 null일 수 없습니다.");
         }
         validateUserId(userId);
-        
+
         if (state == null) {
             throw new IllegalArgumentException("장바구니 상태는 null일 수 없습니다.");
         }
@@ -141,17 +163,36 @@ public class Cart {
     }
 
     // Getter 메서드들
-    public Long getId() { return id; }
-    public Long getUserId() { return userId; }
-    public Long getUserCouponId() { return userCouponId; }
-    public CartState getState() { return state; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public Long getUserCouponId() {
+        return userCouponId;
+    }
+
+    public CartState getState() {
+        return state;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Cart cart = (Cart) o;
         return Objects.equals(id, cart.id);
     }

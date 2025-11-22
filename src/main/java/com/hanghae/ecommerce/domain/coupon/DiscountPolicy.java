@@ -12,38 +12,42 @@ import java.util.Objects;
 public class DiscountPolicy {
 
     public enum DiscountType {
-        RATE, AMOUNT
+        PERCENTAGE, AMOUNT
     }
 
     public enum CouponType {
         ORDER, CART_ITEM
     }
 
-    @Column(name = "discount_rate")
-    private final Integer discountRate; // 할인율 (%)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "discount_type", nullable = false)
+    private DiscountType discountType; // 할인 타입 (PERCENTAGE, AMOUNT)
 
     @Embedded
     @AttributeOverrides({
             @AttributeOverride(name = "amount", column = @Column(name = "discount_value"))
     })
-    private final Money discountAmount; // 할인 금액
+    private Money discountAmount; // 할인 금액 (할인율의 경우에도 여기에 저장)
 
     @Embedded
     @AttributeOverrides({
             @AttributeOverride(name = "amount", column = @Column(name = "min_order_amount"))
     })
-    private final Money minOrderAmount; // 최소 주문 금액
+    private Money minOrderAmount; // 최소 주문 금액
 
     @Transient
-    private final List<Long> applicableProductIds; // 적용 가능한 상품 ID 목록
+    private List<Long> applicableProductIds; // 적용 가능한 상품 ID 목록
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "coupon_type", length = 20)
-    private final CouponType type; // 쿠폰 타입
+    @Transient
+    private CouponType type; // 쿠폰 타입 (현재 사용하지 않음)
 
-    private DiscountPolicy(Integer discountRate, Money discountAmount, Money minOrderAmount,
+    // JPA를 위한 기본 생성자
+    protected DiscountPolicy() {
+    }
+
+    private DiscountPolicy(DiscountType discountType, Money discountAmount, Money minOrderAmount,
             List<Long> applicableProductIds, CouponType type) {
-        this.discountRate = discountRate;
+        this.discountType = discountType;
         this.discountAmount = discountAmount;
         this.minOrderAmount = minOrderAmount;
         this.applicableProductIds = applicableProductIds;
@@ -55,7 +59,7 @@ public class DiscountPolicy {
      */
     public static DiscountPolicy rate(int discountRate) {
         validateDiscountRate(discountRate);
-        return new DiscountPolicy(discountRate, null, null, null, CouponType.ORDER);
+        return new DiscountPolicy(DiscountType.PERCENTAGE, Money.of(discountRate), null, null, CouponType.ORDER);
     }
 
     /**
@@ -63,36 +67,34 @@ public class DiscountPolicy {
      */
     public static DiscountPolicy amount(Money discountAmount) {
         validateDiscountAmount(discountAmount);
-        return new DiscountPolicy(null, discountAmount, null, null, CouponType.ORDER);
+        return new DiscountPolicy(DiscountType.AMOUNT, discountAmount, null, null, CouponType.ORDER);
     }
 
     /**
      * 기존 할인 정책 복원
      */
-    public static DiscountPolicy restore(Integer discountRate, Money discountAmount) {
-        if (discountRate != null && discountAmount != null) {
-            throw new IllegalArgumentException("할인율과 할인 금액은 동시에 설정될 수 없습니다.");
+    public static DiscountPolicy restore(DiscountType discountType, Money discountAmount) {
+        if (discountType == null) {
+            throw new IllegalArgumentException("할인 타입은 필수입니다.");
         }
-        if (discountRate == null && discountAmount == null) {
-            throw new IllegalArgumentException("할인율 또는 할인 금액 중 하나는 반드시 설정되어야 합니다.");
-        }
-
-        if (discountRate != null) {
-            validateDiscountRate(discountRate);
-        }
-        if (discountAmount != null) {
-            validateDiscountAmount(discountAmount);
+        if (discountAmount == null) {
+            throw new IllegalArgumentException("할인 값은 필수입니다.");
         }
 
-        return new DiscountPolicy(discountRate, discountAmount, null, null, CouponType.ORDER);
+        validateDiscountAmount(discountAmount);
+        if (discountType == DiscountType.PERCENTAGE) {
+            validateDiscountRate(discountAmount.getValue());
+        }
+
+        return new DiscountPolicy(discountType, discountAmount, null, null, CouponType.ORDER);
     }
 
     /**
      * 완전한 할인 정책 생성
      */
-    public static DiscountPolicy of(Integer discountRate, Money discountAmount, Money minOrderAmount,
+    public static DiscountPolicy of(DiscountType discountType, Money discountAmount, Money minOrderAmount,
             List<Long> applicableProductIds, CouponType type) {
-        return new DiscountPolicy(discountRate, discountAmount, minOrderAmount, applicableProductIds, type);
+        return new DiscountPolicy(discountType, discountAmount, minOrderAmount, applicableProductIds, type);
     }
 
     /**
@@ -118,7 +120,7 @@ public class DiscountPolicy {
         }
 
         if (isRatePolicy()) {
-            int discountValue = originalAmount.getValue() * discountRate / 100;
+            int discountValue = originalAmount.getValue() * discountAmount.getValue() / 100;
             return Money.of(discountValue);
         } else {
             // 할인 금액이 원래 금액보다 클 경우 원래 금액만큼만 할인
@@ -132,14 +134,14 @@ public class DiscountPolicy {
      * 할인율 기반 정책인지 확인
      */
     public boolean isRatePolicy() {
-        return discountRate != null;
+        return discountType == DiscountType.PERCENTAGE;
     }
 
     /**
      * 할인 금액 기반 정책인지 확인
      */
     public boolean isAmountPolicy() {
-        return discountAmount != null;
+        return discountType == DiscountType.AMOUNT;
     }
 
     // 검증 메서드들
@@ -159,8 +161,8 @@ public class DiscountPolicy {
     }
 
     // Getter 메서드들
-    public Integer getDiscountRate() {
-        return discountRate;
+    public DiscountType getDiscountType() {
+        return discountType;
     }
 
     public Money getDiscountAmount() {
@@ -179,22 +181,12 @@ public class DiscountPolicy {
         return type;
     }
 
-    /**
-     * 할인 타입 반환
-     */
-    public DiscountType getDiscountType() {
-        return isRatePolicy() ? DiscountType.RATE : DiscountType.AMOUNT;
-    }
 
     /**
      * 할인 값 반환 (할인율 또는 할인 금액)
      */
     public int getDiscountValue() {
-        if (isRatePolicy()) {
-            return discountRate;
-        } else {
-            return discountAmount.getValue();
-        }
+        return discountAmount.getValue();
     }
 
     /**
@@ -211,19 +203,19 @@ public class DiscountPolicy {
         if (o == null || getClass() != o.getClass())
             return false;
         DiscountPolicy that = (DiscountPolicy) o;
-        return Objects.equals(discountRate, that.discountRate) &&
+        return Objects.equals(discountType, that.discountType) &&
                 Objects.equals(discountAmount, that.discountAmount);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(discountRate, discountAmount);
+        return Objects.hash(discountType, discountAmount);
     }
 
     @Override
     public String toString() {
         if (isRatePolicy()) {
-            return "할인율: " + discountRate + "%";
+            return "할인율: " + discountAmount.getValue() + "%";
         } else {
             return "할인금액: " + discountAmount + "원";
         }

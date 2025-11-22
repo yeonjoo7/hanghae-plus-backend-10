@@ -10,7 +10,11 @@ import java.util.Objects;
 @Embeddable
 public class Point {
     @Column(name = "value")
-    private final int value;
+    private int value;
+
+    protected Point() {
+        // JPA를 위한 기본 생성자
+    }
 
     private Point(int value) {
         validatePoint(value);
