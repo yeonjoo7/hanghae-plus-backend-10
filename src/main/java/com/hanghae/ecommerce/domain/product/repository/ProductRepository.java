@@ -2,81 +2,65 @@ package com.hanghae.ecommerce.domain.product.repository;
 
 import com.hanghae.ecommerce.domain.product.Product;
 import com.hanghae.ecommerce.domain.product.ProductState;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
 import java.util.List;
 import java.util.Optional;
 
 /**
- * 상품 Repository 인터페이스
+ * 상품 Repository - Spring Data JPA
  */
-public interface ProductRepository {
-    
+public interface ProductRepository extends JpaRepository<Product, Long> {
+
     /**
-     * 상품 저장
-     */
-    Product save(Product product);
-    
-    /**
-     * ID로 상품 조회
-     */
-    Optional<Product> findById(Long id);
-    
-    /**
-     * 여러 ID로 상품 목록 조회
-     */
-    List<Product> findByIdIn(List<Long> ids);
-    
-    /**
-     * 상품명으로 상품 목록 조회 (부분 일치)
+     * 상품명으로 검색 (부분 일치)
      */
     List<Product> findByNameContaining(String name);
-    
+
     /**
-     * 상태별 상품 목록 조회
+     * 상태별 상품 조회
      */
     List<Product> findByState(ProductState state);
-    
+
     /**
-     * 판매 가능한 상품 목록 조회
+     * 활성 상품 조회
      */
-    List<Product> findAvailableProducts();
-    
+    /*
+     * @Query("SELECT p FROM Product p WHERE p.state = com.hanghae.ecommerce.domain.product.ProductState.NORMAL ORDER BY p.createdAt DESC"
+     * )
+     * List<Product> findActiveProducts();
+     */
+
     /**
-     * 모든 상품 조회
+     * ID 목록으로 상품 조회
      */
-    List<Product> findAll();
-    
+    List<Product> findByIdIn(List<Long> ids);
+
     /**
-     * 상품 존재 여부 확인
+     * 이름으로 검색 + 판매 가능한 상품만
      */
-    boolean existsById(Long id);
-    
+    /*
+     * @Query("SELECT p FROM Product p WHERE p.name LIKE %:name% AND p.state = com.hanghae.ecommerce.domain.product.ProductState.NORMAL ORDER BY p.createdAt DESC"
+     * )
+     * List<Product> findActiveProductsByName(@Param("name") String name);
+     */
+
     /**
      * 상품명 존재 여부 확인
      */
     boolean existsByName(String name);
-    
-    /**
-     * 상품 삭제
-     */
-    void deleteById(Long id);
-    
-    /**
-     * 전체 상품 수 조회
-     */
-    long count();
-    
+
     /**
      * 상태별 상품 수 조회
      */
     long countByState(ProductState state);
-    
-    /**
-     * 판매 가능한 상품 목록 조회 (별칭)
-     */
-    List<Product> findByStateIsAvailable();
-    
-    /**
-     * 이름 검색 + 판매 가능한 상품 목록 조회
-     */
-    List<Product> findByNameContainingAndStateIsAvailable(String keyword);
+
+    // JpaRepository가 자동으로 제공:
+    // - Product save(Product product)
+    // - Optional<Product> findById(Long id)
+    // - List<Product> findAll()
+    // - void deleteById(Long id)
+    // - long count()
 }

@@ -1,25 +1,60 @@
 package com.hanghae.ecommerce.domain.payment;
 
 import com.hanghae.ecommerce.domain.product.Money;
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
 /**
  * 결제 도메인 엔티티
  */
+@Entity
+@Table(name = "payments")
 public class Payment {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private final Long id;
+
+    @Column(name = "order_id", nullable = false)
     private final Long orderId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "state", nullable = false)
     private PaymentState state;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method", nullable = false)
     private final PaymentMethod method;
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "amount", column = @Column(name = "amount", nullable = false))
+    })
     private Money paidAmount;
+
+    @Column(name = "paid_at")
     private LocalDateTime paidAt; // 결제 완료 시점
-    private LocalDateTime expiresAt; // nullable
+
+    @Transient
+    private LocalDateTime expiresAt; // nullable (현재 사용하지 않음)
+
+    @Column(name = "created_at", nullable = false, updatable = false)
     private final LocalDateTime createdAt;
+
+    @Transient
     private LocalDateTime updatedAt;
 
+    protected Payment() {
+        // JPA를 위한 기본 생성자
+        this.id = null;
+        this.orderId = null;
+        this.method = null;
+        this.createdAt = LocalDateTime.now();
+    }
+
     private Payment(Long id, Long orderId, PaymentState state, PaymentMethod method,
-                   Money paidAmount, LocalDateTime paidAt, LocalDateTime expiresAt, LocalDateTime createdAt, LocalDateTime updatedAt) {
+            Money paidAmount, LocalDateTime paidAt, LocalDateTime expiresAt, LocalDateTime createdAt,
+            LocalDateTime updatedAt) {
         this.id = id;
         this.orderId = orderId;
         this.state = state;
@@ -42,23 +77,23 @@ public class Payment {
 
         LocalDateTime now = LocalDateTime.now();
         return new Payment(
-            null,
-            orderId,
-            PaymentState.PENDING,
-            method,
-            paidAmount,
-            null,
-            expiresAt,
-            now,
-            now
-        );
+                null,
+                orderId,
+                PaymentState.PENDING,
+                method,
+                paidAmount,
+                null,
+                expiresAt,
+                now,
+                now);
     }
 
     /**
      * 기존 결제 복원 (DB에서 조회)
      */
     public static Payment restore(Long id, Long orderId, PaymentState state, PaymentMethod method,
-                                 Money paidAmount, LocalDateTime paidAt, LocalDateTime expiresAt, LocalDateTime createdAt, LocalDateTime updatedAt) {
+            Money paidAmount, LocalDateTime paidAt, LocalDateTime expiresAt, LocalDateTime createdAt,
+            LocalDateTime updatedAt) {
         if (id == null) {
             throw new IllegalArgumentException("결제 ID는 null일 수 없습니다.");
         }
@@ -66,7 +101,7 @@ public class Payment {
         validateState(state);
         validateMethod(method);
         validatePaidAmount(paidAmount);
-        
+
         if (createdAt == null) {
             throw new IllegalArgumentException("생성일시는 null일 수 없습니다.");
         }
@@ -212,27 +247,55 @@ public class Payment {
         if (method.isInstantProcessable()) {
             return;
         }
-        
+
         if (expiresAt != null && !expiresAt.isAfter(LocalDateTime.now())) {
             throw new IllegalArgumentException("결제 만료일시는 현재 시간보다 이후여야 합니다.");
         }
     }
 
     // Getter 메서드들
-    public Long getId() { return id; }
-    public Long getOrderId() { return orderId; }
-    public PaymentState getState() { return state; }
-    public PaymentMethod getMethod() { return method; }
-    public Money getPaidAmount() { return paidAmount; }
-    public LocalDateTime getPaidAt() { return paidAt; }
-    public LocalDateTime getExpiresAt() { return expiresAt; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public Long getOrderId() {
+        return orderId;
+    }
+
+    public PaymentState getState() {
+        return state;
+    }
+
+    public PaymentMethod getMethod() {
+        return method;
+    }
+
+    public Money getPaidAmount() {
+        return paidAmount;
+    }
+
+    public LocalDateTime getPaidAt() {
+        return paidAt;
+    }
+
+    public LocalDateTime getExpiresAt() {
+        return expiresAt;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Payment payment = (Payment) o;
         return Objects.equals(id, payment.id);
     }

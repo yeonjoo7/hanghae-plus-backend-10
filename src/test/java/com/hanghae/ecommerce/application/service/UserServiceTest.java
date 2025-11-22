@@ -1,5 +1,6 @@
 package com.hanghae.ecommerce.application.service;
 
+import com.hanghae.ecommerce.application.user.UserService;
 import com.hanghae.ecommerce.domain.payment.BalanceTransaction;
 import com.hanghae.ecommerce.domain.payment.TransactionType;
 import com.hanghae.ecommerce.domain.payment.repository.BalanceTransactionRepository;
@@ -40,10 +41,9 @@ class UserServiceTest {
     @BeforeEach
     void setUp() {
         testUser = User.create(
-            "test@example.com",
-            "테스트 사용자",
-            "010-1234-5678"
-        );
+                "test@example.com",
+                "테스트 사용자",
+                "010-1234-5678");
         testUser.chargePoint(Point.of(10000)); // 초기 10,000 포인트
     }
 
@@ -71,8 +71,8 @@ class UserServiceTest {
 
         // when & then
         assertThatThrownBy(() -> userService.getUserById(userId))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("사용자를 찾을 수 없습니다");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("사용자를 찾을 수 없습니다");
     }
 
     @Test
@@ -100,7 +100,7 @@ class UserServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(balanceTransactionRepository.save(any(BalanceTransaction.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         // when
         BalanceTransaction result = userService.chargePoint(userId, chargeAmount);
@@ -122,8 +122,8 @@ class UserServiceTest {
 
         // when & then
         assertThatThrownBy(() -> userService.chargePoint(userId, invalidAmount))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("충전 금액은 1,000원 이상이어야 합니다");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("충전 금액은 1,000원 이상이어야 합니다");
     }
 
     @Test
@@ -138,7 +138,7 @@ class UserServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(balanceTransactionRepository.save(any(BalanceTransaction.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         // when
         BalanceTransaction result = userService.usePoint(userId, useAmount, orderId, "주문 결제");
@@ -164,8 +164,8 @@ class UserServiceTest {
 
         // when & then
         assertThatThrownBy(() -> userService.usePoint(userId, useAmount, orderId, "주문 결제"))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("잔액이 부족합니다");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("잔액이 부족합니다");
     }
 
     @Test
@@ -178,8 +178,8 @@ class UserServiceTest {
 
         // when & then
         assertThatThrownBy(() -> userService.usePoint(userId, invalidAmount, orderId, "주문 결제"))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("사용 금액은 0보다 커야 합니다");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("사용 금액은 0보다 커야 합니다");
     }
 
     @Test
@@ -197,7 +197,7 @@ class UserServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(balanceTransactionRepository.save(any(BalanceTransaction.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         // when
         BalanceTransaction result = userService.refundPoint(userId, refundAmount, orderId);
@@ -221,8 +221,8 @@ class UserServiceTest {
 
         // when & then
         assertThatThrownBy(() -> userService.refundPoint(userId, invalidAmount, orderId))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("환불 금액은 0보다 커야 합니다");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("환불 금액은 0보다 커야 합니다");
     }
 
     @Test
@@ -232,15 +232,13 @@ class UserServiceTest {
         Long userId = 1L;
         List<BalanceTransaction> transactions = new ArrayList<>();
         transactions.add(BalanceTransaction.createCharge(
-            userId, Point.of(10000), Point.of(0), "초기 충전"
-        ));
+                userId, Point.of(10000), Point.of(0), "초기 충전"));
         transactions.add(BalanceTransaction.createPayment(
-            userId, 1L, Point.of(3000), Point.of(10000), "주문 결제"
-        ));
+                userId, 1L, Point.of(3000), Point.of(10000), "주문 결제"));
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
         when(balanceTransactionRepository.findByUserId(userId))
-            .thenReturn(transactions);
+                .thenReturn(transactions);
 
         // when
         List<BalanceTransaction> result = userService.getTransactionHistory(userId);

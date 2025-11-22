@@ -1,6 +1,6 @@
 package com.hanghae.ecommerce.infrastructure.scheduler;
 
-import com.hanghae.ecommerce.application.service.PopularProductService;
+import com.hanghae.ecommerce.application.product.PopularProductService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;

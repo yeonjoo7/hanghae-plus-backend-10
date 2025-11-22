@@ -1,24 +1,56 @@
 package com.hanghae.ecommerce.domain.cart;
 
 import com.hanghae.ecommerce.domain.product.Quantity;
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
 /**
  * 장바구니 아이템 도메인 엔티티
  */
+@Entity
+@Table(name = "cart_items")
 public class CartItem {
-    private final Long id;
-    private final Long cartId;
-    private final Long productId;
-    private final Long productOptionId; // nullable
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "cart_id", nullable = false)
+    private Long cartId;
+
+    @Column(name = "product_id", nullable = false)
+    private Long productId;
+
+    @Column(name = "product_option_id")
+    private Long productOptionId; // nullable
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "state", nullable = false)
     private CartState state;
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "value", column = @Column(name = "quantity", nullable = false))
+    })
     private Quantity quantity;
-    private final LocalDateTime createdAt;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    protected CartItem() {
+        // JPA를 위한 기본 생성자
+        this.id = null;
+        this.cartId = null;
+        this.productId = null;
+        this.productOptionId = null;
+        this.createdAt = LocalDateTime.now();
+    }
+
     private CartItem(Long id, Long cartId, Long productId, Long productOptionId,
-                    CartState state, Quantity quantity, LocalDateTime createdAt, LocalDateTime updatedAt) {
+            CartState state, Quantity quantity, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.cartId = cartId;
         this.productId = productId;
@@ -39,21 +71,21 @@ public class CartItem {
 
         LocalDateTime now = LocalDateTime.now();
         return new CartItem(
-            null,
-            cartId,
-            productId,
-            null,
-            CartState.NORMAL,
-            quantity,
-            now,
-            now
-        );
+                null,
+                cartId,
+                productId,
+                null,
+                CartState.NORMAL,
+                quantity,
+                now,
+                now);
     }
 
     /**
      * 새로운 장바구니 아이템 생성 (상품 옵션용)
      */
-    public static CartItem createForProductOption(Long cartId, Long productId, Long productOptionId, Quantity quantity) {
+    public static CartItem createForProductOption(Long cartId, Long productId, Long productOptionId,
+            Quantity quantity) {
         validateCartId(cartId);
         validateProductId(productId);
         validateProductOptionId(productOptionId);
@@ -61,29 +93,28 @@ public class CartItem {
 
         LocalDateTime now = LocalDateTime.now();
         return new CartItem(
-            null,
-            cartId,
-            productId,
-            productOptionId,
-            CartState.NORMAL,
-            quantity,
-            now,
-            now
-        );
+                null,
+                cartId,
+                productId,
+                productOptionId,
+                CartState.NORMAL,
+                quantity,
+                now,
+                now);
     }
 
     /**
      * 기존 장바구니 아이템 복원 (DB에서 조회)
      */
     public static CartItem restore(Long id, Long cartId, Long productId, Long productOptionId,
-                                 CartState state, Quantity quantity, LocalDateTime createdAt, LocalDateTime updatedAt) {
+            CartState state, Quantity quantity, LocalDateTime createdAt, LocalDateTime updatedAt) {
         if (id == null) {
             throw new IllegalArgumentException("장바구니 아이템 ID는 null일 수 없습니다.");
         }
         validateCartId(cartId);
         validateProductId(productId);
         validateQuantity(quantity);
-        
+
         if (state == null) {
             throw new IllegalArgumentException("장바구니 아이템 상태는 null일 수 없습니다.");
         }
@@ -168,8 +199,8 @@ public class CartItem {
      * 동일한 상품/옵션인지 확인
      */
     public boolean isSameProduct(Long productId, Long productOptionId) {
-        return Objects.equals(this.productId, productId) && 
-               Objects.equals(this.productOptionId, productOptionId);
+        return Objects.equals(this.productId, productId) &&
+                Objects.equals(this.productOptionId, productOptionId);
     }
 
     // 검증 메서드들
@@ -201,19 +232,44 @@ public class CartItem {
     }
 
     // Getter 메서드들
-    public Long getId() { return id; }
-    public Long getCartId() { return cartId; }
-    public Long getProductId() { return productId; }
-    public Long getProductOptionId() { return productOptionId; }
-    public CartState getState() { return state; }
-    public Quantity getQuantity() { return quantity; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public Long getCartId() {
+        return cartId;
+    }
+
+    public Long getProductId() {
+        return productId;
+    }
+
+    public Long getProductOptionId() {
+        return productOptionId;
+    }
+
+    public CartState getState() {
+        return state;
+    }
+
+    public Quantity getQuantity() {
+        return quantity;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         CartItem cartItem = (CartItem) o;
         return Objects.equals(id, cartItem.id);
     }

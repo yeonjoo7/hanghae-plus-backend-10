@@ -1,30 +1,77 @@
 package com.hanghae.ecommerce.domain.payment;
 
 import com.hanghae.ecommerce.domain.user.Point;
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
 /**
  * 잔액 거래 도메인 엔티티
  */
+@Entity
+@Table(name = "balance_transactions")
 public class BalanceTransaction {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private final Long id;
-    private final Long userId;
-    private final Long orderId; // nullable
-    private final TransactionType type;
-    private final Point amount; // 거래 금액 (양수/음수)
-    private final Point balanceBefore; // 거래 전 잔액
-    private final Point balanceAfter; // 거래 후 잔액
-    private String description;
-    private final LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
 
-    private BalanceTransaction(Long id, Long userId, Long orderId, TransactionType type,
-                              Point amount, Point balanceBefore, Point balanceAfter,
-                              String description, LocalDateTime createdAt, LocalDateTime updatedAt) {
+    @Column(name = "user_id", nullable = false)
+    private final Long userId;
+
+    @Column(name = "reference_id")
+    private final Long orderId; // reference ID (order 등)
+
+    @Column(name = "reference_type")
+    private final String referenceType; // reference 타입 ("ORDER" 등)
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type", nullable = false)
+    private final TransactionType type;
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "value", column = @Column(name = "amount", nullable = false))
+    })
+    private final Point amount; // 거래 금액 (양수/음수)
+
+    @Transient
+    private final Point balanceBefore; // 거래 전 잔액 (현재 사용하지 않음)
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "value", column = @Column(name = "balance_after", nullable = false))
+    })
+    private final Point balanceAfter; // 거래 후 잔액
+
+    @Column(name = "description", length = 500)
+    private String description;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private final LocalDateTime createdAt;
+
+    @Transient
+    private LocalDateTime updatedAt; // 현재 사용하지 않음
+
+    // JPA를 위한 기본 생성자
+    protected BalanceTransaction() {
+        this.id = null;
+        this.userId = null;
+        this.orderId = null;
+        this.referenceType = null;
+        this.type = null;
+        this.amount = null;
+        this.balanceBefore = null;
+        this.balanceAfter = null;
+        this.createdAt = LocalDateTime.now();
+    }
+
+    private BalanceTransaction(Long id, Long userId, Long orderId, String referenceType, TransactionType type,
+            Point amount, Point balanceBefore, Point balanceAfter,
+            String description, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.userId = userId;
         this.orderId = orderId;
+        this.referenceType = referenceType;
         this.type = type;
         this.amount = amount;
         this.balanceBefore = balanceBefore;
@@ -37,7 +84,8 @@ public class BalanceTransaction {
     /**
      * 포인트 충전 거래 생성
      */
-    public static BalanceTransaction createCharge(Long userId, Point chargeAmount, Point currentBalance, String description) {
+    public static BalanceTransaction createCharge(Long userId, Point chargeAmount, Point currentBalance,
+            String description) {
         validateUserId(userId);
         validateChargeAmount(chargeAmount);
         validateBalance(currentBalance);
@@ -46,56 +94,56 @@ public class BalanceTransaction {
         LocalDateTime now = LocalDateTime.now();
 
         return new BalanceTransaction(
-            null,
-            userId,
-            null,
-            TransactionType.CHARGE,
-            chargeAmount,
-            currentBalance,
-            newBalance,
-            description,
-            now,
-            now
-        );
+                null,
+                userId,
+                null,
+                null,
+                TransactionType.CHARGE,
+                chargeAmount,
+                currentBalance,
+                newBalance,
+                description,
+                now,
+                now);
     }
 
     /**
      * 결제 거래 생성
      */
-    public static BalanceTransaction createPayment(Long userId, Long orderId, Point paymentAmount, 
-                                                  Point currentBalance, String description) {
+    public static BalanceTransaction createPayment(Long userId, Long orderId, Point paymentAmount,
+            Point currentBalance, String description) {
         validateUserId(userId);
         validateOrderId(orderId);
         validatePaymentAmount(paymentAmount);
         validateBalance(currentBalance);
 
         if (!currentBalance.isGreaterThanOrEqual(paymentAmount)) {
-            throw new IllegalArgumentException("잔액이 부족합니다. 현재: " + currentBalance.getValue() + 
-                                             ", 결제: " + paymentAmount.getValue());
+            throw new IllegalArgumentException("잔액이 부족합니다. 현재: " + currentBalance.getValue() +
+                    ", 결제: " + paymentAmount.getValue());
         }
 
         Point newBalance = currentBalance.subtract(paymentAmount);
         LocalDateTime now = LocalDateTime.now();
 
         return new BalanceTransaction(
-            null,
-            userId,
-            orderId,
-            TransactionType.PAYMENT,
-            paymentAmount, // 양수로 저장, 타입으로 구분
-            currentBalance,
-            newBalance,
-            description,
-            now,
-            now
-        );
+                null,
+                userId,
+                orderId,
+                "ORDER",
+                TransactionType.PAYMENT,
+                paymentAmount, // 양수로 저장, 타입으로 구분
+                currentBalance,
+                newBalance,
+                description,
+                now,
+                now);
     }
 
     /**
      * 환불 거래 생성
      */
-    public static BalanceTransaction createRefund(Long userId, Long orderId, Point refundAmount, 
-                                                 Point currentBalance, String description) {
+    public static BalanceTransaction createRefund(Long userId, Long orderId, Point refundAmount,
+            Point currentBalance, String description) {
         validateUserId(userId);
         validateOrderId(orderId);
         validateRefundAmount(refundAmount);
@@ -105,25 +153,25 @@ public class BalanceTransaction {
         LocalDateTime now = LocalDateTime.now();
 
         return new BalanceTransaction(
-            null,
-            userId,
-            orderId,
-            TransactionType.REFUND,
-            refundAmount,
-            currentBalance,
-            newBalance,
-            description,
-            now,
-            now
-        );
+                null,
+                userId,
+                orderId,
+                "ORDER",
+                TransactionType.REFUND,
+                refundAmount,
+                currentBalance,
+                newBalance,
+                description,
+                now,
+                now);
     }
 
     /**
      * 기존 거래 복원 (DB에서 조회)
      */
-    public static BalanceTransaction restore(Long id, Long userId, Long orderId, TransactionType type,
-                                           Point amount, Point balanceBefore, Point balanceAfter,
-                                           String description, LocalDateTime createdAt, LocalDateTime updatedAt) {
+    public static BalanceTransaction restore(Long id, Long userId, Long orderId, String referenceType, TransactionType type,
+            Point amount, Point balanceBefore, Point balanceAfter,
+            String description, LocalDateTime createdAt, LocalDateTime updatedAt) {
         if (id == null) {
             throw new IllegalArgumentException("거래 ID는 null일 수 없습니다.");
         }
@@ -132,7 +180,7 @@ public class BalanceTransaction {
         validateAmount(amount);
         validateBalance(balanceBefore);
         validateBalance(balanceAfter);
-        
+
         if (createdAt == null) {
             throw new IllegalArgumentException("생성일시는 null일 수 없습니다.");
         }
@@ -140,8 +188,8 @@ public class BalanceTransaction {
             throw new IllegalArgumentException("수정일시는 null일 수 없습니다.");
         }
 
-        return new BalanceTransaction(id, userId, orderId, type, amount, balanceBefore,
-                                    balanceAfter, description, createdAt, updatedAt);
+        return new BalanceTransaction(id, userId, orderId, referenceType, type, amount, balanceBefore,
+                balanceAfter, description, createdAt, updatedAt);
     }
 
     /**
@@ -247,17 +295,50 @@ public class BalanceTransaction {
     }
 
     // Getter 메서드들
-    public Long getId() { return id; }
-    public Long getUserId() { return userId; }
-    public Long getOrderId() { return orderId; }
-    public TransactionType getType() { return type; }
-    public Point getAmount() { return amount; }
-    public Point getBalanceBefore() { return balanceBefore; }
-    public Point getBalanceAfter() { return balanceAfter; }
-    public String getDescription() { return description; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    
+    public Long getId() {
+        return id;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public Long getOrderId() {
+        return orderId;
+    }
+
+    public TransactionType getType() {
+        return type;
+    }
+
+    public Point getAmount() {
+        return amount;
+    }
+
+    public Point getBalanceBefore() {
+        return balanceBefore;
+    }
+
+    public Point getBalanceAfter() {
+        return balanceAfter;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public String getReferenceType() {
+        return referenceType;
+    }
+
     /**
      * 거래 유형 반환 (getTransactionType 별칭)
      */
@@ -267,8 +348,10 @@ public class BalanceTransaction {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         BalanceTransaction that = (BalanceTransaction) o;
         return Objects.equals(id, that.id);
     }

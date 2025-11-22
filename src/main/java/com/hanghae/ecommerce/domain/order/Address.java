@@ -1,14 +1,26 @@
 package com.hanghae.ecommerce.domain.order;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
 import java.util.Objects;
 
 /**
  * 주소를 나타내는 Value Object
  */
+@Embeddable
 public class Address {
-    private final String zipCode;
-    private final String address;
-    private final String detailAddress;
+    @Column(name = "zip_code", length = 10)
+    private String zipCode;
+
+    @Column(name = "address", length = 500)
+    private String address;
+
+    @Column(name = "detail_address", length = 500)
+    private String detailAddress;
+
+    // JPA를 위한 기본 생성자
+    protected Address() {
+    }
 
     private Address(String zipCode, String address, String detailAddress) {
         this.zipCode = zipCode;
@@ -66,14 +78,24 @@ public class Address {
     }
 
     // Getter 메서드들
-    public String getZipCode() { return zipCode; }
-    public String getAddress() { return address; }
-    public String getDetailAddress() { return detailAddress; }
+    public String getZipCode() {
+        return zipCode;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public String getDetailAddress() {
+        return detailAddress;
+    }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Address address1 = (Address) o;
         return Objects.equals(zipCode, address1.zipCode) &&
                 Objects.equals(address, address1.address) &&
