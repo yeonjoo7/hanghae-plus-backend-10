@@ -1,5 +1,6 @@
 package com.hanghae.ecommerce.application.service;
 
+import com.hanghae.ecommerce.application.product.StockService;
 import com.hanghae.ecommerce.domain.product.Product;
 import com.hanghae.ecommerce.domain.product.Money;
 import com.hanghae.ecommerce.domain.product.Quantity;

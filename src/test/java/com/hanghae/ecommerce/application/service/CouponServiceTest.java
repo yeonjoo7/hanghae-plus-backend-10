@@ -1,5 +1,6 @@
 package com.hanghae.ecommerce.application.service;
 
+import com.hanghae.ecommerce.application.coupon.CouponService;
 import com.hanghae.ecommerce.domain.coupon.Coupon;
 import com.hanghae.ecommerce.domain.coupon.DiscountPolicy;
 import com.hanghae.ecommerce.domain.coupon.UserCouponInfo;
@@ -45,7 +46,7 @@ class CouponServiceTest {
     private JdbcTemplate jdbcTemplate;
 
     @InjectMocks
-    private CouponServiceImpl couponService;
+    private CouponService couponService;
 
     private User testUser;
     private Coupon testCoupon;

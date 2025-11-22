@@ -31,10 +31,10 @@ class OrderFlowIntegrationTest extends BaseIntegrationTest {
         private JdbcTemplate jdbcTemplate;
 
         @Autowired
-        private CouponServiceImpl couponService;
+        private CouponService couponService;
 
         @Autowired
-        private PaymentServiceImpl paymentService;
+        private PaymentService paymentService;
 
         @Autowired
         private OrderService orderService;

@@ -36,13 +36,13 @@ class ConcurrencyIntegrationTest extends BaseIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
-    private CouponServiceImpl couponService;
+    private CouponService couponService;
 
     @Autowired
     private OrderService orderService;
 
     @Autowired
-    private PaymentServiceImpl paymentService;
+    private PaymentService paymentService;
 
     @Autowired
     private CartRepository cartRepository;
