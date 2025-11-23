@@ -2,7 +2,9 @@ package com.hanghae.ecommerce.domain.user.repository;
 
 import com.hanghae.ecommerce.domain.user.User;
 import com.hanghae.ecommerce.domain.user.UserState;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -43,6 +45,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     @Query("SELECT u FROM User u WHERE u.state = com.hanghae.ecommerce.domain.user.UserState.NORMAL")
     List<User> findActiveUsers();
+
+    /**
+     * 비관적 락을 사용한 사용자 조회 (동시성 제어)
+     * 잔액 차감 등 동시성 문제가 발생할 수 있는 경우 사용
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM User u WHERE u.id = :id")
+    Optional<User> findByIdWithLock(@Param("id") Long id);
 
     /**
      * 활성 상태 사용자 목록 조회

@@ -2,10 +2,13 @@ package com.hanghae.ecommerce.concurrency;
 
 import com.hanghae.ecommerce.domain.product.Product;
 import com.hanghae.ecommerce.domain.user.User;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.concurrent.*;
@@ -21,6 +24,34 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @DisplayName("잔액 차감 동시성 테스트")
 class BalanceDeductionConcurrencyTest extends BaseConcurrencyTest {
 
+  @Autowired
+  private com.hanghae.ecommerce.domain.payment.repository.PaymentRepository paymentRepository;
+
+  @Autowired
+  private com.hanghae.ecommerce.domain.order.repository.OrderRepository orderRepository;
+
+  @Autowired
+  private com.hanghae.ecommerce.domain.cart.repository.CartItemRepository cartItemRepository;
+
+  @Autowired
+  private com.hanghae.ecommerce.domain.cart.repository.CartRepository cartRepository;
+
+  /**
+   * 각 테스트 후 데이터 정리
+   */
+  @AfterEach
+  @Transactional
+  void cleanup() {
+    // 역순으로 삭제 (의존성 순서)
+    paymentRepository.deleteAll();
+    orderRepository.deleteAll();
+    cartItemRepository.deleteAll();
+    cartRepository.deleteAll();
+    stockRepository.deleteAll();
+    productRepository.deleteAll();
+    userRepository.deleteAll();
+  }
+
   @Test
   @DisplayName("동시 잔액 차감 시 정합성 확인 - 100,000원으로 5개 상품(각 10,000원) 구매")
   void testConcurrentBalanceDeduction() throws Exception {
@@ -32,6 +63,9 @@ class BalanceDeductionConcurrencyTest extends BaseConcurrencyTest {
     CountDownLatch startLatch = new CountDownLatch(1);
     CountDownLatch doneLatch = new CountDownLatch(products.size());
     AtomicInteger successCount = new AtomicInteger(0);
+    AtomicInteger cartSuccessCount = new AtomicInteger(0);
+    AtomicInteger orderSuccessCount = new AtomicInteger(0);
+    AtomicInteger paymentSuccessCount = new AtomicInteger(0);
 
     // when: 5개 상품을 동시에 주문 (총 50,000원 사용)
     for (Product product : products) {
@@ -52,6 +86,7 @@ class BalanceDeductionConcurrencyTest extends BaseConcurrencyTest {
               .andReturn();
 
           if (cartResult.getResponse().getStatus() == 201) {
+            cartSuccessCount.incrementAndGet();
             Long cartItemId = extractCartItemId(cartResult.getResponse().getContentAsString());
 
             // 2. 주문 생성
@@ -63,6 +98,7 @@ class BalanceDeductionConcurrencyTest extends BaseConcurrencyTest {
                 .andReturn();
 
             if (orderResult.getResponse().getStatus() == 201) {
+              orderSuccessCount.incrementAndGet();
               Long orderId = extractOrderId(orderResult.getResponse().getContentAsString());
 
               // 3. 결제
@@ -74,12 +110,25 @@ class BalanceDeductionConcurrencyTest extends BaseConcurrencyTest {
                   .andReturn();
 
               if (paymentResult.getResponse().getStatus() == 200) {
+                paymentSuccessCount.incrementAndGet();
                 successCount.incrementAndGet();
+              } else {
+                System.err.println("Payment failed with status: " + paymentResult.getResponse().getStatus() +
+                    ", body: " + paymentResult.getResponse().getContentAsString());
               }
+            } else {
+              System.err.println("Order creation failed with status: " + orderResult.getResponse().getStatus() +
+                  ", body: " + orderResult.getResponse().getContentAsString());
             }
+          } else {
+            // Cart addition failed - throw exception to see details
+            throw new RuntimeException("Add to cart failed with status: " + cartResult.getResponse().getStatus() +
+                ", body: " + cartResult.getResponse().getContentAsString());
           }
         } catch (Exception e) {
-          // 실패 가능
+          System.err.println("Exception in test: " + e.getClass().getName() + ": " + e.getMessage());
+          e.printStackTrace();
+          throw new RuntimeException(e);
         } finally {
           doneLatch.countDown();
         }
@@ -90,8 +139,24 @@ class BalanceDeductionConcurrencyTest extends BaseConcurrencyTest {
     boolean completed = doneLatch.await(30, TimeUnit.SECONDS);
     executor.shutdown();
 
+    // Print counters for debugging
+    System.out.println("=== Test Results ===");
+    System.out.println("Cart success: " + cartSuccessCount.get() + "/5");
+    System.out.println("Order success: " + orderSuccessCount.get() + "/5");
+    System.out.println("Payment success: " + paymentSuccessCount.get() + "/5");
+    System.out.println("Total success: " + successCount.get() + "/5");
+
     // then: 모두 성공 (잔액 충분)
     assertThat(completed).isTrue();
+    assertThat(cartSuccessCount.get())
+        .as("Cart additions should all succeed")
+        .isEqualTo(5);
+    assertThat(orderSuccessCount.get())
+        .as("Order creations should all succeed")
+        .isEqualTo(5);
+    assertThat(paymentSuccessCount.get())
+        .as("Payments should all succeed")
+        .isEqualTo(5);
     assertThat(successCount.get()).isEqualTo(5);
 
     // 잔액 확인: 50,000원 남아야 함

@@ -85,6 +85,13 @@ tasks.named('test') {
             environment key, value
         }
     }
+    
+    // Enable test logging
+    testLogging {
+        events "passed", "skipped", "failed", "standardOut", "standardError"
+        exceptionFormat "full"
+        showStandardStreams = true
+    }
 }
 
 springBoot {

@@ -69,8 +69,20 @@ public class PaymentService {
     @Transactional
     public PaymentResultDto processPayment(Long userId, Long orderId, PaymentMethod paymentMethod,
             List<Long> couponIds) {
-        // TODO: 실제 구현 필요
-        throw new UnsupportedOperationException("Not implemented yet");
+        // 기존 구현된 메서드 호출
+        Payment payment = processPayment(String.valueOf(orderId), String.valueOf(userId), paymentMethod);
+
+        // PaymentResultDto로 변환하여 반환
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+
+        return new PaymentResultDto(
+                payment,
+                order,
+                List.of(), // appliedCoupons - 현재 구현에서는 빈 리스트
+                true, // success
+                null // errorMessage
+        );
     }
 
     @Transactional
@@ -89,8 +101,8 @@ public class PaymentService {
             throw new PaymentAlreadyCompletedException();
         }
 
-        // 2. 사용자 잔액 확인 및 차감
-        var user = userRepository.findById(Long.valueOf(userId))
+        // 2. 사용자 잔액 확인 및 차감 (비관적 락 사용)
+        var user = userRepository.findByIdWithLock(Long.valueOf(userId))
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다"));
 
         if (user.getAvailablePoint().getValue() < order.getTotalAmount().getValue()) {

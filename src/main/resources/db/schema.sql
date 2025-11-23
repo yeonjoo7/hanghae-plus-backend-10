@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS carts (
     state VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_user_state (user_id, state),
     INDEX idx_user_state (user_id, state)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

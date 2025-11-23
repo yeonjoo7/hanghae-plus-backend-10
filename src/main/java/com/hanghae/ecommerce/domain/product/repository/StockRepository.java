@@ -3,6 +3,7 @@ package com.hanghae.ecommerce.domain.product.repository;
 import com.hanghae.ecommerce.domain.product.Stock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -90,7 +91,9 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     /**
      * 상품 ID로 재고 삭제 (테스트용)
      */
-    void deleteByProductId(Long productId);
+    @Modifying
+    @Query("DELETE FROM Stock s WHERE s.productId = :productId")
+    void deleteByProductId(@Param("productId") Long productId);
 
     // JpaRepository가 자동으로 제공:
     // - Stock save(Stock stock)

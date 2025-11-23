@@ -3,10 +3,13 @@ package com.hanghae.ecommerce.concurrency;
 import com.hanghae.ecommerce.domain.product.Product;
 import com.hanghae.ecommerce.domain.product.Stock;
 import com.hanghae.ecommerce.domain.user.User;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.concurrent.*;
@@ -21,6 +24,30 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  */
 @DisplayName("주문 및 재고 동시성 테스트")
 class OrderStockConcurrencyTest extends BaseConcurrencyTest {
+
+  @Autowired
+  private com.hanghae.ecommerce.domain.payment.repository.PaymentRepository paymentRepository;
+
+  @Autowired
+  private com.hanghae.ecommerce.domain.order.repository.OrderRepository orderRepository;
+
+  @Autowired
+  private com.hanghae.ecommerce.domain.cart.repository.CartItemRepository cartItemRepository;
+
+  @Autowired
+  private com.hanghae.ecommerce.domain.cart.repository.CartRepository cartRepository;
+
+  @AfterEach
+  @Transactional
+  void cleanup() {
+    paymentRepository.deleteAll();
+    orderRepository.deleteAll();
+    cartItemRepository.deleteAll();
+    cartRepository.deleteAll();
+    stockRepository.deleteAll();
+    productRepository.deleteAll();
+    userRepository.deleteAll();
+  }
 
   @Test
   @DisplayName("동시 주문 시 재고 정합성 확인 - 5개 재고에 10명 주문 시 5명만 성공")

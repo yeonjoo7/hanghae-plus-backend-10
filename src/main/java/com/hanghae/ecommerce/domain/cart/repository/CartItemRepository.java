@@ -38,43 +38,27 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
         /**
          * 장바구니 ID와 상태로 아이템 목록 조회
          */
-        /*
-         * @Query("SELECT ci FROM CartItem ci WHERE ci.cartId = :cartId AND ci.state = :state"
-         * )
-         * List<CartItem> findByCartIdAndState(@Param("cartId") Long cartId,
-         * 
-         * @Param("state") com.hanghae.ecommerce.domain.cart.CartState state);
-         * 
-         * @Query("SELECT ci FROM CartItem ci WHERE ci.cartId = :cartId AND ci.productId = :productId AND ci.productOptionId IS NULL AND ci.state = :state"
-         * )
-         * Optional<CartItem> findByCartIdAndProductIdAndProductOptionIdIsNullAndState(
-         * 
-         * @Param("cartId") Long cartId,
-         * 
-         * @Param("productId") Long productId,
-         * 
-         * @Param("state") com.hanghae.ecommerce.domain.cart.CartState state);
-         * 
-         * @Query("SELECT ci FROM CartItem ci WHERE ci.id IN :ids AND ci.cartId = :cartId AND ci.state = :state"
-         * )
-         * List<CartItem> findByIdInAndCartIdAndState(
-         * 
-         * @Param("ids") List<Long> ids,
-         * 
-         * @Param("cartId") Long cartId,
-         * 
-         * @Param("state") com.hanghae.ecommerce.domain.cart.CartState state);
-         * 
-         * @Query("SELECT ci FROM CartItem ci WHERE ci.id = :id AND ci.cartId = :cartId AND ci.state = :state"
-         * )
-         * Optional<CartItem> findByIdAndCartIdAndState(
-         * 
-         * @Param("id") Long id,
-         * 
-         * @Param("cartId") Long cartId,
-         * 
-         * @Param("state") com.hanghae.ecommerce.domain.cart.CartState state);
-         */
+        @Query("SELECT ci FROM CartItem ci WHERE ci.cartId = :cartId AND ci.state = :state")
+        List<CartItem> findByCartIdAndState(@Param("cartId") Long cartId,
+                        @Param("state") com.hanghae.ecommerce.domain.cart.CartState state);
+
+        @Query("SELECT ci FROM CartItem ci WHERE ci.cartId = :cartId AND ci.productId = :productId AND ci.productOptionId IS NULL AND ci.state = :state")
+        Optional<CartItem> findByCartIdAndProductIdAndProductOptionIdIsNullAndState(
+                        @Param("cartId") Long cartId,
+                        @Param("productId") Long productId,
+                        @Param("state") com.hanghae.ecommerce.domain.cart.CartState state);
+
+        @Query("SELECT ci FROM CartItem ci WHERE ci.id IN :ids AND ci.cartId = :cartId AND ci.state = :state")
+        List<CartItem> findByIdInAndCartIdAndState(
+                        @Param("ids") List<Long> ids,
+                        @Param("cartId") Long cartId,
+                        @Param("state") com.hanghae.ecommerce.domain.cart.CartState state);
+
+        @Query("SELECT ci FROM CartItem ci WHERE ci.id = :id AND ci.cartId = :cartId AND ci.state = :state")
+        Optional<CartItem> findByIdAndCartIdAndState(
+                        @Param("id") Long id,
+                        @Param("cartId") Long cartId,
+                        @Param("state") com.hanghae.ecommerce.domain.cart.CartState state);
 
         /**
          * 장바구니 ID로 모든 아이템 삭제

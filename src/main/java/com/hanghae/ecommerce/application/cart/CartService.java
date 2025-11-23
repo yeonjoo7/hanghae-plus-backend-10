@@ -56,15 +56,26 @@ public class CartService {
             throw new IllegalStateException("비활성 사용자는 장바구니를 사용할 수 없습니다.");
         }
 
-        // 활성 장바구니 조회
-        Optional<Cart> existingCart = cartRepository.findByUserIdAndState(userId, CartState.NORMAL);
-        if (existingCart.isPresent()) {
-            return existingCart.get();
+        // 활성 장바구니 조회 (여러 개 있을 수 있으므로 List로 조회)
+        List<Cart> existingCarts = cartRepository.findAllByUserIdAndState(userId, CartState.NORMAL);
+        if (!existingCarts.isEmpty()) {
+            // 가장 최근 장바구니 반환 (이미 ORDER BY createdAt DESC로 정렬됨)
+            return existingCarts.get(0);
         }
 
         // 새 장바구니 생성
-        Cart newCart = Cart.create(userId);
-        return cartRepository.save(newCart);
+        try {
+            Cart newCart = Cart.create(userId);
+            return cartRepository.save(newCart);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // 동시성 문제로 다른 스레드가 이미 장바구니를 생성한 경우
+            // 다시 조회하여 반환
+            List<Cart> carts = cartRepository.findAllByUserIdAndState(userId, CartState.NORMAL);
+            if (!carts.isEmpty()) {
+                return carts.get(0);
+            }
+            throw new IllegalStateException("장바구니 생성 중 오류가 발생했습니다.");
+        }
     }
 
     /**
@@ -148,10 +159,8 @@ public class CartService {
         }
 
         // 기존 동일 상품이 있는지 확인
-        // Optional<CartItem> existingItem =
-        // cartItemRepository.findByCartIdAndProductIdAndProductOptionIdIsNullAndState(
-        // cart.getId(), productId, CartState.NORMAL);
-        Optional<CartItem> existingItem = Optional.empty();
+        Optional<CartItem> existingItem = cartItemRepository.findByCartIdAndProductIdAndProductOptionIdIsNullAndState(
+                cart.getId(), productId, CartState.NORMAL);
 
         CartItem cartItem;
         if (existingItem.isPresent()) {
@@ -249,10 +258,8 @@ public class CartService {
         }
 
         Cart cart = getOrCreateActiveCart(userId);
-        List<CartItem> allCartItems = cartItemRepository.findByCartId(cart.getId());
-        List<CartItem> cartItems = allCartItems.stream()
-                .filter(item -> cartItemIds.contains(item.getId()) && item.getState() == CartState.NORMAL)
-                .collect(Collectors.toList());
+        List<CartItem> cartItems = cartItemRepository.findByIdInAndCartIdAndState(cartItemIds, cart.getId(),
+                CartState.NORMAL);
 
         // 요청된 모든 아이템이 존재하는지 확인
         if (cartItems.size() != cartItemIds.size()) {
@@ -289,11 +296,10 @@ public class CartService {
      */
     private CartItem getCartItemByUser(Long userId, Long cartItemId) {
         Cart cart = getOrCreateActiveCart(userId);
-        // return cartItemRepository.findByIdAndCartIdAndState(cartItemId, cart.getId(),
-        // CartState.NORMAL)
-        // .orElseThrow(() -> new IllegalArgumentException("장바구니 아이템을 찾을 수 없습니다. ID: " +
-        // cartItemId));
-        throw new IllegalArgumentException("장바구니 아이템을 찾을 수 없습니다. ID: " + cartItemId);
+        return cartItemRepository.findByIdAndCartIdAndState(cartItemId, cart.getId(),
+                CartState.NORMAL)
+                .orElseThrow(() -> new IllegalArgumentException("장바구니 아이템을 찾을 수 없습니다. ID: " +
+                        cartItemId));
     }
 
     /**

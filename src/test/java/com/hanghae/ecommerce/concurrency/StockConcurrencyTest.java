@@ -131,6 +131,7 @@ class StockConcurrencyTest extends BaseIntegrationTest {
     }
 
     @Test
+    @org.springframework.transaction.annotation.Transactional
     @DisplayName("재고 부족 시 동시 요청 처리")
     void testConcurrentStockReductionWithInsufficientStock() throws InterruptedException {
         // given
@@ -188,6 +189,7 @@ class StockConcurrencyTest extends BaseIntegrationTest {
     }
 
     @Test
+    @org.springframework.transaction.annotation.Transactional
     @DisplayName("대량 재고 차감 동시성 테스트")
     void testHighVolumeConcurrentStockReduction() throws InterruptedException {
         // given
@@ -254,6 +256,7 @@ class StockConcurrencyTest extends BaseIntegrationTest {
     }
 
     @Test
+    @org.springframework.transaction.annotation.Transactional
     @DisplayName("재고 차감과 복원 동시 처리")
     void testConcurrentStockReductionAndRestoration() throws InterruptedException {
         // given
@@ -390,6 +393,7 @@ class StockConcurrencyTest extends BaseIntegrationTest {
     }
 
     @Test
+    @org.springframework.transaction.annotation.Transactional
     @DisplayName("재고 차감 성능 벤치마크")
     void testStockReductionPerformanceBenchmark() throws InterruptedException {
         // given

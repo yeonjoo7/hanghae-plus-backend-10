@@ -15,11 +15,13 @@ import com.hanghae.ecommerce.domain.user.UserType;
 import com.hanghae.ecommerce.domain.user.repository.UserRepository;
 import com.hanghae.ecommerce.infrastructure.lock.LockManager;
 import com.hanghae.ecommerce.support.BaseIntegrationTest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -64,6 +66,14 @@ class CouponConcurrencyTest extends BaseIntegrationTest {
 
     private Coupon testCoupon;
     private List<User> testUsers;
+
+    @AfterEach
+    @Transactional
+    void cleanup() {
+        userCouponRepository.deleteAll();
+        couponRepository.deleteAll();
+        userRepository.deleteAll();
+    }
 
     @BeforeEach
     void setUp() throws InterruptedException {

@@ -25,17 +25,17 @@ public interface CartRepository extends JpaRepository<Cart, Long> {
     Optional<Cart> findByUserIdAndState(Long userId, CartState state);
 
     /**
+     * 사용자 ID와 상태로 모든 장바구니 조회 (최신순)
+     * NonUniqueResultException 방지를 위해 List 반환
+     */
+    @Query("SELECT c FROM Cart c WHERE c.userId = :userId AND c.state = :state ORDER BY c.createdAt DESC")
+    List<Cart> findAllByUserIdAndState(@Param("userId") Long userId, @Param("state") CartState state);
+
+    /**
      * 활성 상태 장바구니 조회 (사용자별)
      */
-    /*
-     * @Query("SELECT c FROM Cart c WHERE c.userId = :userId AND c.state = com.hanghae.ecommerce.domain.cart.CartState.NORMAL"
-     * )
-     * Optional<Cart> findActiveCartByUserId(@Param("userId") Long userId);
-     * 
-     * @Query("SELECT c FROM Cart c WHERE c.userId = :userId AND c.state = com.hanghae.ecommerce.domain.cart.CartState.NORMAL"
-     * )
-     * Optional<Cart> findByUserId(@Param("userId") Long userId);
-     */
+    @Query("SELECT c FROM Cart c WHERE c.userId = :userId AND c.state = com.hanghae.ecommerce.domain.cart.CartState.NORMAL")
+    Optional<Cart> findActiveCartByUserId(@Param("userId") Long userId);
 
     /**
      * 쿠폰이 적용된 장바구니 목록 조회
