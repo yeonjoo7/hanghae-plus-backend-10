@@ -22,11 +22,23 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.hanghae.ecommerce.config.TestConfig;
-import com.hanghae.ecommerce.config.TestWebConfig;
 import com.hanghae.ecommerce.presentation.controller.product.ProductController;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 
-@WebMvcTest(ProductController.class)
-@Import({TestConfig.class, TestWebConfig.class})
+@WebMvcTest(
+    controllers = ProductController.class,
+    excludeAutoConfiguration = {
+        org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration.class,
+        org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration.class,
+        org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration.class
+    },
+    excludeFilters = @ComponentScan.Filter(
+        type = FilterType.REGEX,
+        pattern = "com\\.hanghae\\.ecommerce\\.application\\.(cart|order|coupon|payment|user)\\..*"
+    )
+)
+@Import(TestConfig.class)
 class ProductControllerTest {
 
     @Autowired
