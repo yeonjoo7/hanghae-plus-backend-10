@@ -70,9 +70,9 @@ class BalanceDeductionConcurrencyTest extends BaseConcurrencyTest {
     // given: 1명의 사용자 (10만원)
     System.out.println("TEST STARTED: testConcurrentBalanceDeduction");
 
-    // Force insert User 1
+    // Force insert User 1 (초기 잔액 100,000원)
     jdbcTemplate.update(
-        "INSERT INTO users (id, email, name, phone, available_point, state, type, created_at, updated_at) VALUES (1, 'balance-test@example.com', '잔액테스트유저', '010-1234-5678', 1000000, 'NORMAL', 'CUSTOMER', NOW(), NOW())");
+        "INSERT INTO users (id, email, name, phone, available_point, state, type, created_at, updated_at) VALUES (1, 'balance-test@example.com', '잔액테스트유저', '010-1234-5678', 100000, 'NORMAL', 'CUSTOMER', NOW(), NOW())");
 
     User testUser = userRepository.findById(1L).orElseThrow();
 

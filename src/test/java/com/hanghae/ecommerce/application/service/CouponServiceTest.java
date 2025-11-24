@@ -135,12 +135,8 @@ class CouponServiceTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
 
-        Map<String, Object> couponMap = java.util.Map.of(
-                "total_quantity", 100,
-                "issued_quantity", 0);
-        when(jdbcTemplate.queryForList(anyString(), any(Object.class))).thenReturn(List.of(couponMap));
-
-        // Mock existing coupon
+        // Mock existing coupon - 중복 발급 체크는 userCouponRepository에서 먼저 수행되므로
+        // jdbcTemplate.queryForList는 호출되지 않음
         UserCoupon existingCoupon = UserCoupon.issue(userId, couponId, LocalDateTime.now().plusDays(7));
         when(userCouponRepository.findByUserIdAndCouponId(userId, couponId)).thenReturn(List.of(existingCoupon));
 

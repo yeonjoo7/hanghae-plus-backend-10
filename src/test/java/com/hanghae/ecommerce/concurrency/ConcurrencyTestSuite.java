@@ -73,6 +73,9 @@ class ConcurrencyTestSuite extends BaseIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
     private User testUser;
     private Product testProduct;
     private Stock testStock;
@@ -124,7 +127,13 @@ class ConcurrencyTestSuite extends BaseIntegrationTest {
         int concurrentUsers = 50; // 50명 동시 구매 시도
 
         // 기존 재고 삭제 후 한정 재고 설정
-        stockRepository.deleteByProductId(testProduct.getId());
+        // @Modifying 쿼리는 트랜잭션 내에서 실행되어야 함
+        org.springframework.transaction.support.TransactionTemplate transactionTemplate = 
+            new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        transactionTemplate.execute(status -> {
+            stockRepository.deleteByProductId(testProduct.getId());
+            return null;
+        });
         Stock limitedStockItem = Stock.createForProduct(testProduct.getId(), Quantity.of(limitedStock), null);
         stockRepository.save(limitedStockItem);
 
@@ -510,15 +519,22 @@ class ConcurrencyTestSuite extends BaseIntegrationTest {
         executorService.execute(() -> {
             try {
                 startLatch.await();
-                lockManager.executeWithLock(lock1, () -> {
-                    Thread.sleep(100);
-                    return lockManager.executeWithLock(lock2, () -> {
-                        completedTasks.incrementAndGet();
+                // 타임아웃을 사용하여 데드락 방지
+                lockManager.executeWithLock(lock1, 5, TimeUnit.SECONDS, () -> {
+                    try {
+                        Thread.sleep(100);
+                        // 중첩 락 호출도 타임아웃 사용
+                        return lockManager.executeWithLock(lock2, 5, TimeUnit.SECONDS, () -> {
+                            completedTasks.incrementAndGet();
+                            return null;
+                        });
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
                         return null;
-                    });
+                    }
                 });
             } catch (Exception e) {
-                // 타임아웃 또는 인터럽트
+                // 타임아웃 또는 인터럽트 - 정상적인 동작
             } finally {
                 endLatch.countDown();
             }
@@ -528,15 +544,22 @@ class ConcurrencyTestSuite extends BaseIntegrationTest {
         executorService.execute(() -> {
             try {
                 startLatch.await();
-                lockManager.executeWithLock(lock2, () -> {
-                    Thread.sleep(100);
-                    return lockManager.executeWithLock(lock1, () -> {
-                        completedTasks.incrementAndGet();
+                // 타임아웃을 사용하여 데드락 방지
+                lockManager.executeWithLock(lock2, 5, TimeUnit.SECONDS, () -> {
+                    try {
+                        Thread.sleep(100);
+                        // 중첩 락 호출도 타임아웃 사용
+                        return lockManager.executeWithLock(lock1, 5, TimeUnit.SECONDS, () -> {
+                            completedTasks.incrementAndGet();
+                            return null;
+                        });
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
                         return null;
-                    });
+                    }
                 });
             } catch (Exception e) {
-                // 타임아웃 또는 인터럽트
+                // 타임아웃 또는 인터럽트 - 정상적인 동작
             } finally {
                 endLatch.countDown();
             }

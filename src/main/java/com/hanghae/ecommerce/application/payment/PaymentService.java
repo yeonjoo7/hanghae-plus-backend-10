@@ -23,6 +23,7 @@ import com.hanghae.ecommerce.presentation.exception.InsufficientStockException;
 import com.hanghae.ecommerce.presentation.exception.OrderNotFoundException;
 import com.hanghae.ecommerce.presentation.exception.PaymentAlreadyCompletedException;
 import com.hanghae.ecommerce.application.product.StockService;
+import com.hanghae.ecommerce.application.coupon.CouponService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +46,7 @@ public class PaymentService {
     private final BalanceTransactionRepository balanceTransactionRepository;
     private final DataTransmissionService dataTransmissionService;
     private final StockService stockService;
+    private final CouponService couponService;
 
     public PaymentService(JdbcTemplate jdbcTemplate,
             OrderRepository orderRepository,
@@ -54,7 +56,8 @@ public class PaymentService {
             PaymentRepository paymentRepository,
             BalanceTransactionRepository balanceTransactionRepository,
             DataTransmissionService dataTransmissionService,
-            StockService stockService) {
+            StockService stockService,
+            CouponService couponService) {
         this.jdbcTemplate = jdbcTemplate;
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
@@ -64,6 +67,7 @@ public class PaymentService {
         this.balanceTransactionRepository = balanceTransactionRepository;
         this.dataTransmissionService = dataTransmissionService;
         this.stockService = stockService;
+        this.couponService = couponService;
     }
 
     @Transactional
@@ -129,17 +133,9 @@ public class PaymentService {
         }
 
         // 4. 쿠폰 사용 처리
-        // 쿠폰 사용 처리는 다른 서비스에서 수행
-        // if (order.getCouponId() != null) {
-        // jdbcTemplate.update(
-        // """
-        // UPDATE user_coupons
-        // SET status = 'USED', used_at = NOW()
-        // WHERE user_id = ? AND coupon_id = ? AND status = 'AVAILABLE'
-        // """,
-        // userId, 1L // 쿠폰 ID 처리 필요
-        // );
-        // }
+        if (order.getUserCouponId() != null) {
+            couponService.useCoupon(order.getUserCouponId(), Long.valueOf(userId));
+        }
 
         // 5. 결제 정보 생성
         Payment payment = Payment.create(
