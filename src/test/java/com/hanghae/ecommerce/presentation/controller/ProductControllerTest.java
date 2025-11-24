@@ -8,8 +8,9 @@ import com.hanghae.ecommerce.domain.product.Quantity;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureWebMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -20,10 +21,13 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.hanghae.ecommerce.support.BaseIntegrationTest;
+import com.hanghae.ecommerce.config.TestConfig;
+import com.hanghae.ecommerce.config.TestWebConfig;
+import com.hanghae.ecommerce.presentation.controller.product.ProductController;
 
-@AutoConfigureWebMvc
-class ProductControllerTest extends BaseIntegrationTest {
+@WebMvcTest(ProductController.class)
+@Import({TestConfig.class, TestWebConfig.class})
+class ProductControllerTest {
 
     @Autowired
     private MockMvc mockMvc;

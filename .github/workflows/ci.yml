@@ -10,6 +10,21 @@ jobs:
   test:
     runs-on: ubuntu-latest
     
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          DB_TEST_URL: ${{ secrets.DB_TEST_URL }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,6 +42,10 @@ jobs:
       - name: Run tests with Testcontainers
         run: ./gradlew test --info
         env:
+          # 데이터베이스 연결 정보 (서비스 컨테이너 사용)
+          DB_TEST_URL: jdbc:mysql://localhost:3306/testdb?useSSL=false&serverTimezone=UTC&characterEncoding=UTF-8&allowPublicKeyRetrieval=true
+          DB_USERNAME: testuser
+          DB_PASSWORD: testpassword
           # Testcontainers 설정
           TESTCONTAINERS_RYUK_DISABLED: false
           TESTCONTAINERS_CHECKS_DISABLE: false
@@ -37,7 +56,7 @@ jobs:
         with:
           files: build/test-results/test/**/*.xml
           check_name: 'Test Results'
-          comment_mode: create_new
+          comment_mode: always
           report_individual_runs: true
           deduplicate_classes_by_file_name: true
       
