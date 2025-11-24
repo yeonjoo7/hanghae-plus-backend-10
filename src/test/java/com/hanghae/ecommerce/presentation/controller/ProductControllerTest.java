@@ -12,32 +12,20 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.hanghae.ecommerce.config.TestConfig;
 import com.hanghae.ecommerce.presentation.controller.product.ProductController;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.FilterType;
 
-@WebMvcTest(
-    controllers = ProductController.class,
-    excludeAutoConfiguration = {
-        org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration.class
-    },
-    excludeFilters = @ComponentScan.Filter(
-        type = FilterType.REGEX,
-        pattern = "com\\.hanghae\\.ecommerce\\.application\\.(cart|order|coupon|payment|user)\\..*"
-    )
-)
+@WebMvcTest(ProductController.class)
+@ActiveProfiles("test")
 @Import(TestConfig.class)
 class ProductControllerTest {
 
@@ -49,6 +37,37 @@ class ProductControllerTest {
 
     @MockBean
     private ProductService productService;
+    
+    // 다른 서비스들이 자동으로 로드되는 것을 방지하기 위해 MockBean으로 선언
+    @MockBean
+    private com.hanghae.ecommerce.application.cart.CartService cartService;
+    
+    @MockBean
+    private com.hanghae.ecommerce.application.order.OrderService orderService;
+    
+    @MockBean
+    private com.hanghae.ecommerce.application.coupon.CouponService couponService;
+    
+    @MockBean
+    private com.hanghae.ecommerce.application.payment.PaymentService paymentService;
+    
+    @MockBean
+    private com.hanghae.ecommerce.application.user.UserService userService;
+    
+    @MockBean
+    private com.hanghae.ecommerce.application.product.StockService stockService;
+    
+    @MockBean
+    private com.hanghae.ecommerce.application.product.PopularProductService popularProductService;
+    
+    @MockBean
+    private com.hanghae.ecommerce.infrastructure.external.DataTransmissionService dataTransmissionService;
+    
+    @MockBean
+    private com.hanghae.ecommerce.infrastructure.scheduler.PopularProductScheduler popularProductScheduler;
+    
+    @MockBean
+    private com.hanghae.ecommerce.infrastructure.scheduler.DataTransmissionScheduler dataTransmissionScheduler;
 
     @Test
     @DisplayName("상품 상세 조회 성공")
