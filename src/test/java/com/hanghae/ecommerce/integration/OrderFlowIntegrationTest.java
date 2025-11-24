@@ -123,13 +123,15 @@ class OrderFlowIntegrationTest extends BaseIntegrationTest {
                                 Integer.class);
                 assertThat(availablePoint).isEqualTo(37000);
 
-                // 6. 재고 확인
+                // 6. 재고 확인 (결제 시점에 재고 차감됨)
+                // product1: 초기 10 -> 주문 생성 시 차감 없음 -> 결제 시 1개 차감 = 9
+                // product2: 초기 20 -> 주문 생성 시 차감 없음 -> 결제 시 2개 차감 = 18
                 Integer stock1 = jdbcTemplate.queryForObject(
                                 "SELECT available_quantity FROM stocks WHERE product_id='1'", Integer.class);
                 Integer stock2 = jdbcTemplate.queryForObject(
                                 "SELECT available_quantity FROM stocks WHERE product_id='2'", Integer.class);
-                assertThat(stock1).isEqualTo(8);
-                assertThat(stock2).isEqualTo(16);
+                assertThat(stock1).isEqualTo(9); // 10 - 1 (결제 시 차감)
+                assertThat(stock2).isEqualTo(18); // 20 - 2 (결제 시 차감)
 
                 // 7. 쿠폰 상태 확인
                 String status = jdbcTemplate.queryForObject(

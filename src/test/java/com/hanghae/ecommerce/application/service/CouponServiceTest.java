@@ -76,7 +76,9 @@ class CouponServiceTest {
                 "total_quantity", 100,
                 "issued_quantity", 0);
         // Use any() for the varargs
-        when(jdbcTemplate.queryForList(anyString(), any(Object.class))).thenReturn(List.of(couponMap));
+        when(jdbcTemplate.queryForList(anyString(), eq(couponId))).thenReturn(List.of(couponMap));
+        // jdbcTemplate.update가 1을 반환하도록 설정 (업데이트 성공)
+        when(jdbcTemplate.update(anyString(), eq(couponId))).thenReturn(1);
 
         when(userCouponRepository.findByUserIdAndCouponId(userId, couponId)).thenReturn(List.of());
         when(userCouponRepository.save(any(UserCoupon.class))).thenAnswer(invocation -> invocation.getArgument(0));

@@ -165,8 +165,8 @@ public class OrderService {
 
         List<OrderItem> savedOrderItems = orderItemRepository.saveAll(orderItems);
 
-        // 재고 차감
-        stockService.reduceStocks(stockRequests);
+        // 재고 차감은 결제 처리 시점에 수행됩니다 (PaymentService.processPayment)
+        // 주문 생성 시점에는 재고 확인만 수행합니다
 
         // 주문 정보 반환
         return createOrderInfo(savedOrder, savedOrderItems, cartItemInfos);

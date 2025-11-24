@@ -34,6 +34,9 @@ class StockServiceTest {
     @Mock
     private LockManager lockManager;
 
+    @Mock
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
     @InjectMocks
     private StockService stockService;
 

@@ -31,9 +31,15 @@ jobs:
           TESTCONTAINERS_RYUK_DISABLED: false
           TESTCONTAINERS_CHECKS_DISABLE: false
       
-      - name: Generate test report
+      - name: Publish Test Results
         if: always()
-        run: ./gradlew test --info
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: build/test-results/test/**/*.xml
+          check_name: 'Test Results'
+          comment_mode: create_new
+          report_individual_runs: true
+          deduplicate_classes_by_file_name: true
       
       - name: Upload test results
         if: always()

@@ -125,7 +125,8 @@ class OrderServiceTest {
 
                 verify(orderRepository).save(any(Order.class));
                 verify(orderItemRepository).saveAll(anyList());
-                verify(stockService).reduceStocks(anyMap());
+                // 재고 차감은 결제 처리 시점에 수행되므로 주문 생성 시점에는 검증하지 않음
+                verify(stockService).checkStockAvailability(anyMap());
         }
 
         @Test
