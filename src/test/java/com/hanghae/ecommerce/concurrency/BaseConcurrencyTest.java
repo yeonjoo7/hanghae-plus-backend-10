@@ -17,6 +17,9 @@ import com.hanghae.ecommerce.support.BaseIntegrationTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -49,6 +52,130 @@ public abstract class BaseConcurrencyTest extends BaseIntegrationTest {
 
   @Autowired
   protected StockRepository stockRepository;
+
+  @Autowired
+  protected com.hanghae.ecommerce.domain.cart.repository.CartRepository cartRepository;
+
+  @Autowired
+  protected PlatformTransactionManager transactionManager;
+
+  /**
+   * 별도 트랜잭션으로 사용자 생성 (즉시 커밋)
+   */
+  protected User createUserInNewTransaction(String email, String name, int availablePoint) {
+    TransactionTemplate template = new TransactionTemplate(transactionManager);
+    template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+    return template.execute(status -> {
+      User user = User.create(email, name, "010-1234-5678");
+      if (availablePoint > 0) {
+        user.chargePoint(com.hanghae.ecommerce.domain.user.Point.of(availablePoint));
+      }
+      return userRepository.save(user);
+    });
+  }
+
+  /**
+   * 별도 트랜잭션으로 여러 사용자 생성 (즉시 커밋)
+   */
+  protected List<User> createUsersInNewTransaction(int count) {
+    TransactionTemplate template = new TransactionTemplate(transactionManager);
+    template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+    return template.execute(status -> {
+      List<User> users = new ArrayList<>();
+      long timestamp = System.currentTimeMillis();
+      for (int i = 0; i < count; i++) {
+        User user = User.create(
+            "user" + i + "_" + timestamp + "@test.com",
+            "테스트유저" + i,
+            "010-1234-5678");
+        user.chargePoint(com.hanghae.ecommerce.domain.user.Point.of(100000));
+        users.add(userRepository.save(user));
+      }
+      return users;
+    });
+  }
+
+  /**
+   * 별도 트랜잭션으로 상품 생성 (즉시 커밋)
+   */
+  protected Product createProductInNewTransaction(String name, int price, int stockQuantity) {
+    TransactionTemplate template = new TransactionTemplate(transactionManager);
+    template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+    return template.execute(status -> {
+      Product product = Product.create(
+          name,
+          "테스트 상품",
+          Money.of(price),
+          Quantity.of(10));
+      product = productRepository.save(product);
+
+      Stock stock = Stock.createForProduct(product.getId(), Quantity.of(stockQuantity), null);
+      stockRepository.save(stock);
+
+      return product;
+    });
+  }
+
+  /**
+   * 별도 트랜잭션으로 여러 상품 생성 (즉시 커밋)
+   */
+  protected List<Product> createProductsInNewTransaction(int count, int price, int stockQuantity) {
+    TransactionTemplate template = new TransactionTemplate(transactionManager);
+    template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+    return template.execute(status -> {
+      List<Product> products = new ArrayList<>();
+      long timestamp = System.currentTimeMillis();
+      for (int i = 0; i < count; i++) {
+        Product product = Product.create(
+            "상품" + timestamp + "_" + i,
+            "테스트 상품" + i,
+            Money.of(price),
+            Quantity.of(10));
+        product = productRepository.save(product);
+
+        Stock stock = Stock.createForProduct(product.getId(), Quantity.of(stockQuantity), null);
+        stockRepository.save(stock);
+
+        products.add(product);
+      }
+      return products;
+    });
+  }
+
+  /**
+   * 별도 트랜잭션으로 카트 생성 (즉시 커밋)
+   * 동시성 테스트에서 카트 중복 생성 오류를 피하기 위해 사용
+   */
+  protected com.hanghae.ecommerce.domain.cart.Cart createCartInNewTransaction(Long userId) {
+    TransactionTemplate template = new TransactionTemplate(transactionManager);
+    template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+    return template.execute(status -> {
+      com.hanghae.ecommerce.domain.cart.Cart cart = com.hanghae.ecommerce.domain.cart.Cart.create(userId);
+      return cartRepository.save(cart);
+    });
+  }
+
+  /**
+   * 별도 트랜잭션으로 여러 사용자의 카트 생성 (즉시 커밋)
+   */
+  protected List<com.hanghae.ecommerce.domain.cart.Cart> createCartsInNewTransaction(List<User> users) {
+    TransactionTemplate template = new TransactionTemplate(transactionManager);
+    template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+    return template.execute(status -> {
+      List<com.hanghae.ecommerce.domain.cart.Cart> carts = new ArrayList<>();
+      for (User user : users) {
+        com.hanghae.ecommerce.domain.cart.Cart cart = com.hanghae.ecommerce.domain.cart.Cart.create(user.getId());
+        carts.add(cartRepository.save(cart));
+      }
+      return carts;
+    });
+  }
 
   /**
    * 테스트용 쿠폰 생성

@@ -43,10 +43,12 @@ public class CartService {
 
     /**
      * 사용자의 활성 장바구니 조회 (없으면 생성)
+     * 동시성 문제를 처리하기 위해 @Transactional 사용
      * 
      * @param userId 사용자 ID
      * @return 장바구니 정보
      */
+    @org.springframework.transaction.annotation.Transactional
     public Cart getOrCreateActiveCart(Long userId) {
         // 사용자 존재 확인
         User user = userRepository.findById(userId)

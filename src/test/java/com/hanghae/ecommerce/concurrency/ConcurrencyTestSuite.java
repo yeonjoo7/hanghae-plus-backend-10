@@ -293,7 +293,7 @@ class ConcurrencyTestSuite extends BaseIntegrationTest {
                     boolean gotCoupon = false;
                     if (Math.random() < 0.5) {
                         try {
-                            couponService.issueCoupon(user.getId(), finalFlashSaleCoupon.getId());
+                            couponService.issueCoupon(finalFlashSaleCoupon.getId(), user.getId());
                             gotCoupon = true;
                         } catch (Exception e) {
                             // 쿠폰 발급 실패

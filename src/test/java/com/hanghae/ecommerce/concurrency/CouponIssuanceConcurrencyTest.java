@@ -64,7 +64,7 @@ class CouponIssuanceConcurrencyTest extends BaseConcurrencyTest {
           startLatch.await();
 
           // 서비스 직접 호출
-          couponService.issueCoupon(user.getId(), testCoupon.getId());
+          couponService.issueCoupon(testCoupon.getId(), user.getId());
           successCount.incrementAndGet();
 
         } catch (Exception e) {
@@ -141,7 +141,7 @@ class CouponIssuanceConcurrencyTest extends BaseConcurrencyTest {
         try {
           startLatch.await();
 
-          couponService.issueCoupon(user.getId(), smallCoupon.getId());
+          couponService.issueCoupon(smallCoupon.getId(), user.getId());
           successCount.incrementAndGet();
 
         } catch (Exception e) {
@@ -181,7 +181,7 @@ class CouponIssuanceConcurrencyTest extends BaseConcurrencyTest {
         try {
           startLatch.await();
 
-          couponService.issueCoupon(user.getId(), testCoupon.getId());
+          couponService.issueCoupon(testCoupon.getId(), user.getId());
           successCount.incrementAndGet();
 
         } catch (Exception e) {

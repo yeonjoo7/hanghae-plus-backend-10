@@ -11,7 +11,8 @@ import org.springframework.context.annotation.FilterType;
         "com.hanghae.ecommerce.domain",
         "com.hanghae.ecommerce.presentation",
         "com.hanghae.ecommerce.infrastructure",
-        "com.hanghae.ecommerce.common"
+        "com.hanghae.ecommerce.common",
+        "com.hanghae.ecommerce.config"
 }, excludeFilters = @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.hanghae\\.ecommerce\\.domain\\..*\\.repository\\..*"))
 public class EcommerceApiApplication {
     public static void main(String[] args) {

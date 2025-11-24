@@ -4,6 +4,7 @@ import com.hanghae.ecommerce.application.cart.CartService;
 import com.hanghae.ecommerce.application.cart.CartService.CartInfo;
 import com.hanghae.ecommerce.application.cart.CartService.CartItemInfo;
 import com.hanghae.ecommerce.application.product.StockService;
+import com.hanghae.ecommerce.common.annotation.AuthenticatedUser;
 import com.hanghae.ecommerce.common.ApiResponse;
 import com.hanghae.ecommerce.domain.product.Stock;
 import com.hanghae.ecommerce.presentation.dto.*;
@@ -14,7 +15,6 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -28,16 +28,13 @@ public class CartController {
     private final CartService cartService;
     private final StockService stockService;
 
-    // TODO: 현재는 임시로 userId를 1L로 고정. 실제로는 인증된 사용자 정보에서 가져와야 함
-    private static final Long CURRENT_USER_ID = 1L;
-
     /**
      * 장바구니 조회
      * GET /carts
      */
     @GetMapping
-    public ApiResponse<CartResponse> getCart() {
-        CartInfo cartInfo = cartService.getCartInfo(CURRENT_USER_ID);
+    public ApiResponse<CartResponse> getCart(@AuthenticatedUser Long userId) {
+        CartInfo cartInfo = cartService.getCartInfo(userId);
 
         List<CartResponse.CartItemResponse> items = cartInfo.getItems().stream()
                 .map(this::toCartItemResponse)
@@ -60,7 +57,9 @@ public class CartController {
      */
     @PostMapping("/items")
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<AddCartItemResponse> addCartItem(@Valid @RequestBody AddCartItemRequest request) {
+    public ApiResponse<AddCartItemResponse> addCartItem(
+            @AuthenticatedUser Long userId,
+            @Valid @RequestBody AddCartItemRequest request) {
         try {
             // 재고 확인
             Stock stock = stockService.getStock(request.getProductId());
@@ -71,7 +70,7 @@ public class CartController {
             }
 
             CartItemInfo cartItemInfo = cartService.addItemToCart(
-                    CURRENT_USER_ID,
+                    userId,
                     request.getProductId(),
                     request.getQuantity());
 
@@ -101,11 +100,12 @@ public class CartController {
      */
     @PatchMapping("/items/{cartItemId}")
     public ApiResponse<UpdateCartItemResponse> updateCartItem(
+            @AuthenticatedUser Long userId,
             @PathVariable Long cartItemId,
             @Valid @RequestBody UpdateCartItemRequest request) {
         try {
             CartItemInfo cartItemInfo = cartService.updateCartItemQuantity(
-                    CURRENT_USER_ID,
+                    userId,
                     cartItemId,
                     request.getQuantity());
 
@@ -139,9 +139,11 @@ public class CartController {
      */
     @DeleteMapping("/items/{cartItemId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void removeCartItem(@PathVariable Long cartItemId) {
+    public void removeCartItem(
+            @AuthenticatedUser Long userId,
+            @PathVariable Long cartItemId) {
         try {
-            cartService.removeCartItem(CURRENT_USER_ID, cartItemId);
+            cartService.removeCartItem(userId, cartItemId);
         } catch (IllegalArgumentException e) {
             if (e.getMessage().contains("장바구니 아이템을 찾을 수 없습니다")) {
                 throw new CartItemNotFoundException(cartItemId);

@@ -30,13 +30,16 @@ public class StockService {
     private final StockRepository stockRepository;
     private final ProductRepository productRepository;
     private final LockManager lockManager;
+    private final org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     public StockService(StockRepository stockRepository,
             ProductRepository productRepository,
-            LockManager lockManager) {
+            LockManager lockManager,
+            org.springframework.transaction.PlatformTransactionManager transactionManager) {
         this.stockRepository = stockRepository;
         this.productRepository = productRepository;
         this.lockManager = lockManager;
+        this.transactionManager = transactionManager;
     }
 
     /**
@@ -135,7 +138,6 @@ public class StockService {
      * @throws IllegalArgumentException 상품 또는 재고를 찾을 수 없거나, 재고가 부족한 경우
      * @throws RuntimeException         락 획득 실패 또는 동시성 오류
      */
-    @org.springframework.transaction.annotation.Transactional
     public void reduceStock(Long productId, int quantity) {
         if (productId == null) {
             throw new IllegalArgumentException("상품 ID는 null일 수 없습니다.");
@@ -147,42 +149,59 @@ public class StockService {
         String lockKey = "stock:" + productId;
 
         lockManager.executeWithLock(lockKey, () -> {
-            // 상품 판매 가능 여부 확인
-            Product product = productRepository.findById(productId)
-                    .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId));
+            org.springframework.transaction.support.TransactionTemplate template = new org.springframework.transaction.support.TransactionTemplate(
+                    transactionManager);
+            template.setPropagationBehavior(
+                    org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
-            if (!product.isAvailable()) {
-                throw new IllegalArgumentException("판매 중지된 상품입니다. ID: " + productId);
-            }
+            return template.execute(status -> {
+                System.out.println(
+                        "Thread " + Thread.currentThread().getId() + " acquired lock for product " + productId);
 
-            // 구매 제한 수량 확인
-            if (product.exceedsLimitedQuantity(Quantity.of(quantity))) {
-                throw new IllegalArgumentException("구매 제한 수량을 초과했습니다. 제한: " +
-                        product.getLimitedQuantity().getValue() + ", 요청: " + quantity);
-            }
+                // 상품 판매 가능 여부 확인
+                Product product = productRepository.findById(productId)
+                        .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId));
 
-            // 재고 조회 및 차감
-            Stock stock = stockRepository.findByProductIdAndProductOptionIdIsNullForUpdate(productId)
-                    .orElseThrow(() -> new IllegalArgumentException("재고를 찾을 수 없습니다. ProductID: " + productId));
+                if (!product.isAvailable()) {
+                    throw new IllegalArgumentException("판매 중지된 상품입니다. ID: " + productId);
+                }
 
-            // 재고 부족 확인
-            if (!stock.hasEnoughStock(Quantity.of(quantity))) {
-                throw new IllegalArgumentException(String.format(
-                        "재고가 부족합니다. 요청: %d, 현재 재고: %d",
-                        quantity, stock.getAvailableQuantity().getValue()));
-            }
+                // 구매 제한 수량 확인
+                if (product.exceedsLimitedQuantity(Quantity.of(quantity))) {
+                    throw new IllegalArgumentException("구매 제한 수량을 초과했습니다. 제한: " +
+                            product.getLimitedQuantity().getValue() + ", 요청: " + quantity);
+                }
 
-            // 원자적 재고 차감
-            stock.reduceStock(Quantity.of(quantity));
-            stockRepository.save(stock);
+                // 재고 조회 및 차감
+                Stock stock = stockRepository.findByProductIdAndProductOptionIdIsNullForUpdate(productId)
+                        .orElseThrow(() -> new IllegalArgumentException("재고를 찾을 수 없습니다. ProductID: " + productId));
 
-            // 재고 소진 시 상품 품절 처리
-            if (stock.isEmpty()) {
-                product.markOutOfStock();
-                productRepository.save(product);
-            }
+                System.out.println("Thread " + Thread.currentThread().getId() + " read stock: "
+                        + stock.getAvailableQuantity().getValue());
 
-            return null; // Void 작업이므로 null 반환
+                // 재고 부족 확인
+                if (!stock.hasEnoughStock(Quantity.of(quantity))) {
+                    System.out.println("Thread " + Thread.currentThread().getId() + " failed: Insufficient stock");
+                    throw new IllegalArgumentException(String.format(
+                            "재고가 부족합니다. 요청: %d, 현재 재고: %d",
+                            quantity, stock.getAvailableQuantity().getValue()));
+                }
+
+                // 원자적 재고 차감
+                stock.reduceStock(Quantity.of(quantity));
+                stockRepository.save(stock);
+
+                System.out.println("Thread " + Thread.currentThread().getId() + " reduced stock to: "
+                        + stock.getAvailableQuantity().getValue());
+
+                // 재고 소진 시 상품 품절 처리
+                if (stock.isEmpty()) {
+                    product.markOutOfStock();
+                    productRepository.save(product);
+                }
+
+                return null;
+            });
         });
     }
 
@@ -223,7 +242,6 @@ public class StockService {
      * @throws IllegalArgumentException 상품 또는 재고를 찾을 수 없는 경우
      * @throws RuntimeException         락 획득 실패 또는 동시성 오류
      */
-    @org.springframework.transaction.annotation.Transactional
     public void restoreStock(Long productId, int quantity) {
         if (productId == null) {
             throw new IllegalArgumentException("상품 ID는 null일 수 없습니다.");
@@ -235,25 +253,32 @@ public class StockService {
         String lockKey = "stock:" + productId;
 
         lockManager.executeWithLock(lockKey, () -> {
-            Product product = productRepository.findById(productId)
-                    .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId));
+            org.springframework.transaction.support.TransactionTemplate template = new org.springframework.transaction.support.TransactionTemplate(
+                    transactionManager);
+            template.setPropagationBehavior(
+                    org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
-            Stock stock = stockRepository.findByProductIdAndProductOptionIdIsNullForUpdate(productId)
-                    .orElseThrow(() -> new IllegalArgumentException("재고를 찾을 수 없습니다. ProductID: " + productId));
+            return template.execute(status -> {
+                Product product = productRepository.findById(productId)
+                        .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId));
 
-            boolean wasEmpty = stock.isEmpty();
+                Stock stock = stockRepository.findByProductIdAndProductOptionIdIsNullForUpdate(productId)
+                        .orElseThrow(() -> new IllegalArgumentException("재고를 찾을 수 없습니다. ProductID: " + productId));
 
-            // 원자적 재고 복구
-            stock.restoreStock(Quantity.of(quantity));
-            stockRepository.save(stock);
+                boolean wasEmpty = stock.isEmpty();
 
-            // 품절 상태에서 재고가 복구되면 판매 재개
-            if (wasEmpty && !stock.isEmpty() && !product.isAvailable()) {
-                product.markInStock();
-                productRepository.save(product);
-            }
+                // 원자적 재고 복구
+                stock.restoreStock(Quantity.of(quantity));
+                stockRepository.save(stock);
 
-            return null; // Void 작업이므로 null 반환
+                // 품절 상태에서 재고가 복구되면 판매 재개
+                if (wasEmpty && !stock.isEmpty() && !product.isAvailable()) {
+                    product.markInStock();
+                    productRepository.save(product);
+                }
+
+                return null;
+            });
         });
     }
 
@@ -286,31 +311,42 @@ public class StockService {
      * @param quantity  추가할 수량
      * @param memo      메모
      */
-    @org.springframework.transaction.annotation.Transactional
     public void addStock(Long productId, int quantity, String memo) {
         if (quantity <= 0) {
             throw new IllegalArgumentException("추가할 수량은 0보다 커야 합니다.");
         }
 
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId));
+        String lockKey = "stock:" + productId;
 
-        Stock stock = stockRepository.findByProductIdAndProductOptionIdIsNull(productId)
-                .orElseThrow(() -> new IllegalArgumentException("재고를 찾을 수 없습니다. ProductID: " + productId));
+        lockManager.executeWithLock(lockKey, () -> {
+            org.springframework.transaction.support.TransactionTemplate template = new org.springframework.transaction.support.TransactionTemplate(
+                    transactionManager);
+            template.setPropagationBehavior(
+                    org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
-        boolean wasEmpty = stock.isEmpty();
+            return template.execute(status -> {
+                Product product = productRepository.findById(productId)
+                        .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId));
 
-        stock.addStock(Quantity.of(quantity));
-        if (memo != null) {
-            stock.updateMemo(memo);
-        }
-        stockRepository.save(stock);
+                Stock stock = stockRepository.findByProductIdAndProductOptionIdIsNull(productId)
+                        .orElseThrow(() -> new IllegalArgumentException("재고를 찾을 수 없습니다. ProductID: " + productId));
 
-        // 품절 상태에서 재고가 추가되면 판매 재개
-        if (wasEmpty && !stock.isEmpty() && !product.isAvailable()) {
-            product.markInStock();
-            productRepository.save(product);
-        }
+                boolean wasEmpty = stock.isEmpty();
+
+                stock.addStock(Quantity.of(quantity));
+                if (memo != null) {
+                    stock.updateMemo(memo);
+                }
+                stockRepository.save(stock);
+
+                // 품절 상태에서 재고가 추가되면 판매 재개
+                if (wasEmpty && !stock.isEmpty() && !product.isAvailable()) {
+                    product.markInStock();
+                    productRepository.save(product);
+                }
+                return null;
+            });
+        });
     }
 
     /**

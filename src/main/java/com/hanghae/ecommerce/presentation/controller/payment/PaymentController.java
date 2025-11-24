@@ -25,22 +25,20 @@ public class PaymentController {
 
     private final PaymentService paymentService;
 
-    // TODO: 현재는 임시로 userId를 1L로 고정. 실제로는 인증된 사용자 정보에서 가져와야 함
-    private static final Long CURRENT_USER_ID = 1L;
-
     /**
      * 주문 결제
      * POST /orders/{orderId}/payment
      */
     @PostMapping("/{orderId}/payment")
     public ApiResponse<PaymentResponse> processPayment(
+            @com.hanghae.ecommerce.common.annotation.AuthenticatedUser Long userId,
             @PathVariable Long orderId,
             @Valid @RequestBody PaymentRequest request) {
         try {
             PaymentMethod paymentMethod = parsePaymentMethod(request.getPaymentMethod());
 
             PaymentResultDto paymentResult = paymentService.processPayment(
-                    CURRENT_USER_ID,
+                    userId,
                     orderId,
                     paymentMethod,
                     request.getCouponIds());

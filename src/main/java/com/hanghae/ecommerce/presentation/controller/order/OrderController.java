@@ -3,7 +3,7 @@ package com.hanghae.ecommerce.presentation.controller.order;
 import com.hanghae.ecommerce.application.order.OrderService;
 import com.hanghae.ecommerce.application.order.OrderService.OrderInfo;
 import com.hanghae.ecommerce.application.order.OrderService.OrderSummary;
-import com.hanghae.ecommerce.application.order.OrderService.OrderItemInfo;
+import com.hanghae.ecommerce.common.annotation.AuthenticatedUser;
 import com.hanghae.ecommerce.common.ApiResponse;
 import com.hanghae.ecommerce.domain.order.OrderState;
 import com.hanghae.ecommerce.presentation.dto.*;
@@ -29,19 +29,18 @@ public class OrderController {
 
     private final OrderService orderService;
 
-    // TODO: 현재는 임시로 userId를 1L로 고정. 실제로는 인증된 사용자 정보에서 가져와야 함
-    private static final Long CURRENT_USER_ID = 1L;
-
     /**
      * 주문 생성
      * POST /orders
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<CreateOrderResponse> createOrder(@Valid @RequestBody CreateOrderRequest request) {
+    public ApiResponse<CreateOrderResponse> createOrder(
+            @AuthenticatedUser Long userId,
+            @Valid @RequestBody CreateOrderRequest request) {
         try {
             OrderInfo orderInfo = orderService.createOrder(
-                    CURRENT_USER_ID,
+                    userId,
                     request.getCartItemIds(),
                     request.getShippingAddress().getRecipientName(),
                     request.getShippingAddress().getPhone(),
@@ -67,9 +66,11 @@ public class OrderController {
      * GET /orders/{orderId}
      */
     @GetMapping("/{orderId}")
-    public ApiResponse<OrderDetailResponse> getOrder(@PathVariable Long orderId) {
+    public ApiResponse<OrderDetailResponse> getOrder(
+            @AuthenticatedUser Long userId,
+            @PathVariable Long orderId) {
         try {
-            OrderInfo orderInfo = orderService.getOrder(CURRENT_USER_ID, orderId);
+            OrderInfo orderInfo = orderService.getOrder(userId, orderId);
             OrderDetailResponse response = toOrderDetailResponse(orderInfo);
             return ApiResponse.success(response);
         } catch (IllegalArgumentException e) {
@@ -88,6 +89,7 @@ public class OrderController {
      */
     @GetMapping
     public ApiResponse<OrderListResponse> getOrders(
+            @AuthenticatedUser Long userId,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
             @RequestParam(required = false) String status,
@@ -115,7 +117,7 @@ public class OrderController {
         }
 
         List<OrderSummary> orders = orderService.getUserOrdersWithFilter(
-                CURRENT_USER_ID, orderState, start, end);
+                userId, orderState, start, end);
 
         // 페이징 처리 (간단한 구현)
         int totalItems = orders.size();

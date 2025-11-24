@@ -41,8 +41,8 @@ CREATE TABLE IF NOT EXISTS products (
     state VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_state (state),
-    INDEX idx_created_at (created_at)
+    INDEX idx_products_state (state),
+    INDEX idx_products_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 재고 테이블
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS stocks (
     memo VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_product_id (product_id)
+    INDEX idx_stocks_product_id (product_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 상품 옵션 테이블
@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS product_options (
     stock INT DEFAULT 0 NOT NULL CHECK (stock >= 0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_product_id (product_id)
+    INDEX idx_product_options_product_id (product_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 쿠폰 테이블
@@ -85,8 +85,8 @@ CREATE TABLE IF NOT EXISTS coupons (
     end_date TIMESTAMP NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_dates (start_date, end_date),
-    INDEX idx_state (issued_quantity, total_quantity)
+    INDEX idx_coupons_dates (start_date, end_date),
+    INDEX idx_coupons_state (issued_quantity, total_quantity)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 사용자 쿠폰 테이블
@@ -101,8 +101,8 @@ CREATE TABLE IF NOT EXISTS user_coupons (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_user_coupon (user_id, coupon_id),
-    INDEX idx_user_state (user_id, state),
-    INDEX idx_expires_at (expires_at)
+    INDEX idx_user_coupons_user_state (user_id, state),
+    INDEX idx_user_coupons_expires_at (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 장바구니 테이블
@@ -113,8 +113,8 @@ CREATE TABLE IF NOT EXISTS carts (
     state VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_user_state (user_id, state),
-    INDEX idx_user_state (user_id, state)
+    UNIQUE KEY uk_carts_user_state (user_id, state),
+    INDEX idx_carts_user_state (user_id, state)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 장바구니 아이템 테이블
@@ -127,8 +127,8 @@ CREATE TABLE IF NOT EXISTS cart_items (
     state VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_cart_product_option (cart_id, product_id, product_option_id),
-    INDEX idx_cart_id (cart_id)
+    UNIQUE KEY uk_cart_items_product_option (cart_id, product_id, product_option_id),
+    INDEX idx_cart_items_cart_id (cart_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 주문 테이블
@@ -154,10 +154,10 @@ CREATE TABLE IF NOT EXISTS orders (
     shipped_at TIMESTAMP NULL,
     delivered_at TIMESTAMP NULL,
     cancelled_at TIMESTAMP NULL,
-    INDEX idx_user_id (user_id),
-    INDEX idx_state (state),
-    INDEX idx_order_number (order_number),
-    INDEX idx_ordered_at (ordered_at)
+    INDEX idx_orders_user_id (user_id),
+    INDEX idx_orders_state (state),
+    INDEX idx_orders_order_number (order_number),
+    INDEX idx_orders_ordered_at (ordered_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 주문 아이템 테이블
@@ -173,7 +173,7 @@ CREATE TABLE IF NOT EXISTS order_items (
     total_amount DECIMAL(15,2) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_order_id (order_id)
+    INDEX idx_order_items_order_id (order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 결제 테이블
@@ -188,8 +188,8 @@ CREATE TABLE IF NOT EXISTS payments (
     failed_reason TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_order_id (order_id),
-    INDEX idx_state (state)
+    INDEX idx_payments_order_id (order_id),
+    INDEX idx_payments_state (state)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 잔액 거래 테이블
@@ -204,9 +204,9 @@ CREATE TABLE IF NOT EXISTS balance_transactions (
     reference_type VARCHAR(20),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_user_id (user_id),
-    INDEX idx_created_at (created_at),
-    INDEX idx_reference (reference_id, reference_type)
+    INDEX idx_balance_transactions_user_id (user_id),
+    INDEX idx_balance_transactions_created_at (created_at),
+    INDEX idx_balance_transactions_reference (reference_id, reference_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 재고 테이블 (재고 변경 이력 관리)
@@ -222,8 +222,8 @@ CREATE TABLE IF NOT EXISTS stock_movements (
     reference_type VARCHAR(20),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_product_id (product_id),
-    INDEX idx_created_at (created_at)
+    INDEX idx_stock_movements_product_id (product_id),
+    INDEX idx_stock_movements_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 외부 데이터 전송 테이블 (Outbox 패턴)
@@ -239,8 +239,8 @@ CREATE TABLE IF NOT EXISTS data_transmissions (
     sent_at TIMESTAMP NULL,
     failed_at TIMESTAMP NULL,
     error_message TEXT,
-    INDEX idx_state_created (state, created_at),
-    INDEX idx_aggregate (aggregate_id, aggregate_type)
+    INDEX idx_data_transmissions_state_created (state, created_at),
+    INDEX idx_data_transmissions_aggregate (aggregate_id, aggregate_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 인기 상품 캐시 테이블
@@ -252,8 +252,8 @@ CREATE TABLE IF NOT EXISTS popular_products_cache (
     ranking INT NOT NULL,
     period_start TIMESTAMP NOT NULL,
     period_end TIMESTAMP NOT NULL,
-    INDEX idx_calculated_ranking (calculated_at, ranking),
-    INDEX idx_period (period_start, period_end)
+    INDEX idx_popular_products_calculated_ranking (calculated_at, ranking),
+    INDEX idx_popular_products_period (period_start, period_end)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;

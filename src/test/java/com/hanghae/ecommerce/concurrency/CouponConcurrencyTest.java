@@ -144,7 +144,7 @@ class CouponConcurrencyTest extends BaseIntegrationTest {
                     startLatch.await();
 
                     // 쿠폰 발급 시도
-                    UserCoupon issuedCoupon = couponService.issueCoupon(user.getId(), testCoupon.getId());
+                    UserCoupon issuedCoupon = couponService.issueCoupon(testCoupon.getId(), user.getId());
 
                     if (issuedCoupon != null) {
                         successCount.incrementAndGet();
@@ -233,7 +233,7 @@ class CouponConcurrencyTest extends BaseIntegrationTest {
             executorService.execute(() -> {
                 try {
                     startLatch.await();
-                    couponService.issueCoupon(user.getId(), testCoupon.getId());
+                    couponService.issueCoupon(testCoupon.getId(), user.getId());
                 } catch (Exception e) {
                     // 성능 테스트이므로 예외는 무시
                 } finally {
@@ -288,7 +288,7 @@ class CouponConcurrencyTest extends BaseIntegrationTest {
             executorService.execute(() -> {
                 try {
                     startLatch.await();
-                    couponService.issueCoupon(user.getId(), limitedCoupon.getId());
+                    couponService.issueCoupon(limitedCoupon.getId(), user.getId());
                     successCount.incrementAndGet();
                 } catch (Exception e) {
                     // 실패는 정상 (쿠폰 수량 부족)

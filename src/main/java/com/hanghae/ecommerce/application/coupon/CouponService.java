@@ -43,7 +43,13 @@ public class CouponService {
         userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다. ID: " + userId));
 
-        // 1. 쿠폰 정보 조회 및 락 (수량 체크 제거 - 락 획득 후 체크)
+        // 1. 중복 발급 체크 (락 획득 전에 먼저 체크)
+        var existingCoupons = userCouponRepository.findByUserIdAndCouponId(userId, couponId);
+        if (!existingCoupons.isEmpty()) {
+            throw new CouponAlreadyIssuedException();
+        }
+
+        // 2. 쿠폰 정보 조회 및 락
         List<Map<String, Object>> coupons = jdbcTemplate.queryForList(
                 """
                         SELECT * FROM coupons
@@ -57,24 +63,17 @@ public class CouponService {
         }
 
         Map<String, Object> couponData = coupons.get(0);
-        int totalQuantity = (Integer) couponData.get("total_quantity");
-        int issuedQuantity = (Integer) couponData.get("issued_quantity");
+        // 수량 체크는 UPDATE 문에서 원자적으로 수행됩니다
 
-        // 1-1. 수량 체크 (락 획득 후)
-        if (issuedQuantity >= totalQuantity) {
+        // 3. 쿠폰 수량 증가 (원자적 업데이트 with 수량 체크)
+        int updatedRows = jdbcTemplate.update(
+                "UPDATE coupons SET issued_quantity = issued_quantity + 1 WHERE id = ? AND issued_quantity < total_quantity",
+                couponId);
+
+        // 업데이트 실패 시 (다른 트랜잭션이 먼저 소진시킴)
+        if (updatedRows == 0) {
             throw new IllegalStateException("쿠폰이 모두 소진되었습니다.");
         }
-
-        // 2. 중복 발급 체크
-        var existingCoupons = userCouponRepository.findByUserIdAndCouponId(userId, couponId);
-        if (!existingCoupons.isEmpty()) {
-            throw new CouponAlreadyIssuedException();
-        }
-
-        // 3. 쿠폰 수량 증가
-        jdbcTemplate.update(
-                "UPDATE coupons SET issued_quantity = issued_quantity + 1 WHERE id = ?",
-                couponId);
 
         // 4. 사용자 쿠폰 발급
         LocalDateTime expiresAt = LocalDateTime.now().plusDays(7);

@@ -12,6 +12,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -45,8 +48,28 @@ class StockConcurrencyTest extends BaseIntegrationTest {
     @Autowired
     private LockManager lockManager;
 
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     private Product testProduct;
     private Stock testStock;
+
+    /**
+     * 별도 트랜잭션으로 재고 설정 (즉시 커밋)
+     */
+    private void setupStockInNewTransaction(Long productId, int quantity) {
+        TransactionTemplate transactionTemplate = new TransactionTemplate(
+                transactionManager);
+        transactionTemplate.setPropagationBehavior(
+                TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        transactionTemplate.execute(status -> {
+            stockRepository.deleteByProductId(productId);
+            Stock stock = Stock.createForProduct(productId, Quantity.of(quantity), null);
+            stockRepository.save(stock);
+            return null;
+        });
+    }
 
     @BeforeEach
     void setUp() {
@@ -131,7 +154,6 @@ class StockConcurrencyTest extends BaseIntegrationTest {
     }
 
     @Test
-    @org.springframework.transaction.annotation.Transactional
     @DisplayName("재고 부족 시 동시 요청 처리")
     void testConcurrentStockReductionWithInsufficientStock() throws InterruptedException {
         // given
@@ -139,10 +161,8 @@ class StockConcurrencyTest extends BaseIntegrationTest {
         int concurrentUsers = 200;
         int quantityPerUser = 1;
 
-        // 기존 재고 삭제 후 재고를 100개로 설정
-        stockRepository.deleteByProductId(testProduct.getId());
-        Stock limitedStock = Stock.createForProduct(testProduct.getId(), Quantity.of(initialStock), null);
-        stockRepository.save(limitedStock);
+        // 별도 트랜잭션으로 재고 설정 (즉시 커밋)
+        setupStockInNewTransaction(testProduct.getId(), initialStock);
 
         ExecutorService executorService = Executors.newFixedThreadPool(50);
         CountDownLatch startLatch = new CountDownLatch(1);
@@ -189,7 +209,6 @@ class StockConcurrencyTest extends BaseIntegrationTest {
     }
 
     @Test
-    @org.springframework.transaction.annotation.Transactional
     @DisplayName("대량 재고 차감 동시성 테스트")
     void testHighVolumeConcurrentStockReduction() throws InterruptedException {
         // given
@@ -197,10 +216,8 @@ class StockConcurrencyTest extends BaseIntegrationTest {
         int concurrentUsers = 500;
         int quantityPerUser = 20; // 각 사용자가 20개씩 구매
 
-        // 기존 재고 삭제 후 대량 재고 설정
-        stockRepository.deleteByProductId(testProduct.getId());
-        Stock highVolumeStock = Stock.createForProduct(testProduct.getId(), Quantity.of(initialStock), null);
-        stockRepository.save(highVolumeStock);
+        // 별도 트랜잭션으로 재고 설정 (즉시 커밋)
+        setupStockInNewTransaction(testProduct.getId(), initialStock);
 
         ExecutorService executorService = Executors.newFixedThreadPool(100);
         CountDownLatch startLatch = new CountDownLatch(1);
@@ -256,17 +273,14 @@ class StockConcurrencyTest extends BaseIntegrationTest {
     }
 
     @Test
-    @org.springframework.transaction.annotation.Transactional
     @DisplayName("재고 차감과 복원 동시 처리")
     void testConcurrentStockReductionAndRestoration() throws InterruptedException {
         // given
         int initialStock = 500;
         int operations = 200; // 차감 100번, 복원 100번
 
-        // 기존 재고 삭제 후 새 재고 설정
-        stockRepository.deleteByProductId(testProduct.getId());
-        Stock testStock = Stock.createForProduct(testProduct.getId(), Quantity.of(initialStock), null);
-        stockRepository.save(testStock);
+        // 별도 트랜잭션으로 재고 설정 (즉시 커밋)
+        setupStockInNewTransaction(testProduct.getId(), initialStock);
 
         ExecutorService executorService = Executors.newFixedThreadPool(50);
         CountDownLatch startLatch = new CountDownLatch(1);
@@ -393,17 +407,14 @@ class StockConcurrencyTest extends BaseIntegrationTest {
     }
 
     @Test
-    @org.springframework.transaction.annotation.Transactional
     @DisplayName("재고 차감 성능 벤치마크")
     void testStockReductionPerformanceBenchmark() throws InterruptedException {
         // given
         int operations = 1000;
         int threadPoolSize = 100;
 
-        // 기존 재고 삭제 후 새 재고 설정
-        stockRepository.deleteByProductId(testProduct.getId());
-        Stock performanceStock = Stock.createForProduct(testProduct.getId(), Quantity.of(operations), null);
-        stockRepository.save(performanceStock);
+        // 별도 트랜잭션으로 재고 설정 (즉시 커밋)
+        setupStockInNewTransaction(testProduct.getId(), operations);
 
         ExecutorService executorService = Executors.newFixedThreadPool(threadPoolSize);
         CountDownLatch startLatch = new CountDownLatch(1);
