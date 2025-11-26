@@ -1,5 +1,6 @@
 package com.hanghae.ecommerce.support;
 
+import com.hanghae.ecommerce.config.RedisTestContainerConfig;
 import com.hanghae.ecommerce.config.TestConfig;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -8,7 +9,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest
 @ActiveProfiles("test")
-@Import(TestConfig.class)
+@Import({ TestConfig.class, RedisTestContainerConfig.class })
 @AutoConfigureMockMvc
 public abstract class BaseIntegrationTest {
 }
