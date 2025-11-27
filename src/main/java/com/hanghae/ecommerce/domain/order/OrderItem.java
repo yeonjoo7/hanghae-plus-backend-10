@@ -2,28 +2,74 @@ package com.hanghae.ecommerce.domain.order;
 
 import com.hanghae.ecommerce.domain.product.Money;
 import com.hanghae.ecommerce.domain.product.Quantity;
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
 /**
  * 주문 아이템 도메인 엔티티
  */
+@Entity
+@Table(name = "order_items")
 public class OrderItem {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private final Long id;
+
+    @Column(name = "order_id", nullable = false)
     private final Long orderId;
+
+    @Column(name = "product_id", nullable = false)
     private final Long productId;
+
+    @Column(name = "product_option_id")
     private final Long productOptionId; // nullable
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "state", nullable = false)
     private OrderState state;
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "amount", column = @Column(name = "price", nullable = false))
+    })
     private Money price; // 상품 단가
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "value", column = @Column(name = "quantity", nullable = false))
+    })
     private Quantity quantity;
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "amount", column = @Column(name = "discount_amount", nullable = false))
+    })
     private Money discountAmount;
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "amount", column = @Column(name = "total_amount", nullable = false))
+    })
     private Money totalAmount; // 총 금액 (price * quantity - discountAmount)
+
+    @Column(name = "created_at", nullable = false, updatable = false)
     private final LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    protected OrderItem() {
+        this.id = null;
+        this.orderId = null;
+        this.productId = null;
+        this.productOptionId = null;
+        this.createdAt = null;
+    }
+
     private OrderItem(Long id, Long orderId, Long productId, Long productOptionId,
-                     OrderState state, Money price, Quantity quantity, Money discountAmount,
-                     Money totalAmount, LocalDateTime createdAt, LocalDateTime updatedAt) {
+            OrderState state, Money price, Quantity quantity, Money discountAmount,
+            Money totalAmount, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.orderId = orderId;
         this.productId = productId;
@@ -41,7 +87,7 @@ public class OrderItem {
      * 새로운 주문 아이템 생성 (상품용)
      */
     public static OrderItem createForProduct(Long orderId, Long productId, Money price,
-                                           Quantity quantity, Money discountAmount) {
+            Quantity quantity, Money discountAmount) {
         validateOrderId(orderId);
         validateProductId(productId);
         validatePrice(price);
@@ -52,25 +98,24 @@ public class OrderItem {
 
         LocalDateTime now = LocalDateTime.now();
         return new OrderItem(
-            null,
-            orderId,
-            productId,
-            null,
-            OrderState.PENDING_PAYMENT,
-            price,
-            quantity,
-            discountAmount,
-            totalAmount,
-            now,
-            now
-        );
+                null,
+                orderId,
+                productId,
+                null,
+                OrderState.PENDING_PAYMENT,
+                price,
+                quantity,
+                discountAmount,
+                totalAmount,
+                now,
+                now);
     }
 
     /**
      * 새로운 주문 아이템 생성 (상품 옵션용)
      */
     public static OrderItem createForProductOption(Long orderId, Long productId, Long productOptionId,
-                                                 Money price, Quantity quantity, Money discountAmount) {
+            Money price, Quantity quantity, Money discountAmount) {
         validateOrderId(orderId);
         validateProductId(productId);
         validateProductOptionId(productOptionId);
@@ -82,27 +127,26 @@ public class OrderItem {
 
         LocalDateTime now = LocalDateTime.now();
         return new OrderItem(
-            null,
-            orderId,
-            productId,
-            productOptionId,
-            OrderState.PENDING_PAYMENT,
-            price,
-            quantity,
-            discountAmount,
-            totalAmount,
-            now,
-            now
-        );
+                null,
+                orderId,
+                productId,
+                productOptionId,
+                OrderState.PENDING_PAYMENT,
+                price,
+                quantity,
+                discountAmount,
+                totalAmount,
+                now,
+                now);
     }
 
     /**
      * 기존 주문 아이템 복원 (DB에서 조회)
      */
     public static OrderItem restore(Long id, Long orderId, Long productId, Long productOptionId,
-                                  OrderState state, Money price, Quantity quantity,
-                                  Money discountAmount, Money totalAmount,
-                                  LocalDateTime createdAt, LocalDateTime updatedAt) {
+            OrderState state, Money price, Quantity quantity,
+            Money discountAmount, Money totalAmount,
+            LocalDateTime createdAt, LocalDateTime updatedAt) {
         if (id == null) {
             throw new IllegalArgumentException("주문 아이템 ID는 null일 수 없습니다.");
         }
@@ -113,7 +157,7 @@ public class OrderItem {
         validateQuantity(quantity);
         validateDiscountAmount(discountAmount);
         validateTotalAmount(totalAmount);
-        
+
         if (createdAt == null) {
             throw new IllegalArgumentException("생성일시는 null일 수 없습니다.");
         }
@@ -122,7 +166,7 @@ public class OrderItem {
         }
 
         return new OrderItem(id, orderId, productId, productOptionId, state, price,
-                           quantity, discountAmount, totalAmount, createdAt, updatedAt);
+                quantity, discountAmount, totalAmount, createdAt, updatedAt);
     }
 
     /**
@@ -183,6 +227,20 @@ public class OrderItem {
      */
     public boolean hasDiscount() {
         return discountAmount.isPositive();
+    }
+
+    /**
+     * 단가 조회 (getPrice의 별칭)
+     */
+    public Money getUnitPrice() {
+        return price;
+    }
+
+    /**
+     * 소계 계산 (단가 × 수량, 할인 적용 전)
+     */
+    public Money getSubtotal() {
+        return price.multiply(quantity.getValue());
     }
 
     /**
@@ -251,22 +309,56 @@ public class OrderItem {
     }
 
     // Getter 메서드들
-    public Long getId() { return id; }
-    public Long getOrderId() { return orderId; }
-    public Long getProductId() { return productId; }
-    public Long getProductOptionId() { return productOptionId; }
-    public OrderState getState() { return state; }
-    public Money getPrice() { return price; }
-    public Quantity getQuantity() { return quantity; }
-    public Money getDiscountAmount() { return discountAmount; }
-    public Money getTotalAmount() { return totalAmount; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public Long getOrderId() {
+        return orderId;
+    }
+
+    public Long getProductId() {
+        return productId;
+    }
+
+    public Long getProductOptionId() {
+        return productOptionId;
+    }
+
+    public OrderState getState() {
+        return state;
+    }
+
+    public Money getPrice() {
+        return price;
+    }
+
+    public Quantity getQuantity() {
+        return quantity;
+    }
+
+    public Money getDiscountAmount() {
+        return discountAmount;
+    }
+
+    public Money getTotalAmount() {
+        return totalAmount;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         OrderItem orderItem = (OrderItem) o;
         return Objects.equals(id, orderItem.id);
     }

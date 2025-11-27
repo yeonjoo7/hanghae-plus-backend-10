@@ -1,12 +1,20 @@
 package com.hanghae.ecommerce.domain.product;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
 import java.util.Objects;
 
 /**
  * 금액을 나타내는 Value Object
  */
+@Embeddable
 public class Money {
-    private final int amount;
+    @Column(name = "amount")
+    private int amount;
+
+    // JPA를 위한 기본 생성자
+    protected Money() {
+    }
 
     private Money(int amount) {
         validateAmount(amount);
@@ -104,7 +112,7 @@ public class Money {
     public int getAmount() {
         return amount;
     }
-    
+
     /**
      * 금액 값 반환 (getValue 별칭)
      */
@@ -114,8 +122,10 @@ public class Money {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Money money = (Money) o;
         return amount == money.amount;
     }

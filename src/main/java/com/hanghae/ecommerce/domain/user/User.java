@@ -1,5 +1,6 @@
 package com.hanghae.ecommerce.domain.user;
 
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -7,28 +8,64 @@ import java.util.regex.Pattern;
 /**
  * 사용자 도메인 엔티티
  */
+@Entity
+@Table(name = "users")
 public class User {
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
-        "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
-    );
+            "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     private static final Pattern PHONE_PATTERN = Pattern.compile(
-        "^\\d{2,3}-\\d{3,4}-\\d{4}$"
-    );
+            "^\\d{2,3}-\\d{3,4}-\\d{4}$");
 
-    private final Long id;
-    private final String email;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "email", nullable = false, unique = true, length = 255)
+    private String email;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "state", nullable = false, length = 20)
     private UserState state;
-    private final UserType type;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type", nullable = false, length = 20)
+    private UserType type;
+
+    @Column(name = "name", nullable = false, length = 100)
     private String name;
+
+    @Column(name = "phone", length = 20)
     private String phone;
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "value", column = @Column(name = "available_point", nullable = false))
+    })
     private Point availablePoint;
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "value", column = @Column(name = "used_point", nullable = false))
+    })
     private Point usedPoint;
-    private final LocalDateTime createdAt;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    private User(Long id, String email, UserState state, UserType type, String name, 
-                String phone, Point availablePoint, Point usedPoint, 
-                LocalDateTime createdAt, LocalDateTime updatedAt) {
+    protected User() {
+        // JPA를 위한 기본 생성자
+        this.id = null;
+        this.email = null;
+        this.type = UserType.CUSTOMER;
+        this.createdAt = LocalDateTime.now();
+    }
+
+    private User(Long id, String email, UserState state, UserType type, String name,
+            String phone, Point availablePoint, Point usedPoint,
+            LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.email = email;
         this.state = state;
@@ -51,32 +88,31 @@ public class User {
 
         LocalDateTime now = LocalDateTime.now();
         return new User(
-            null,
-            email,
-            UserState.NORMAL,
-            UserType.CUSTOMER,
-            name,
-            phone,
-            Point.zero(),
-            Point.zero(),
-            now,
-            now
-        );
+                null,
+                email,
+                UserState.NORMAL,
+                UserType.CUSTOMER,
+                name,
+                phone,
+                Point.zero(),
+                Point.zero(),
+                now,
+                now);
     }
 
     /**
      * 기존 사용자 복원 (DB에서 조회)
      */
-    public static User restore(Long id, String email, UserState state, UserType type, 
-                              String name, String phone, Point availablePoint, Point usedPoint,
-                              LocalDateTime createdAt, LocalDateTime updatedAt) {
+    public static User restore(Long id, String email, UserState state, UserType type,
+            String name, String phone, Point availablePoint, Point usedPoint,
+            LocalDateTime createdAt, LocalDateTime updatedAt) {
         if (id == null) {
             throw new IllegalArgumentException("사용자 ID는 null일 수 없습니다.");
         }
         validateEmail(email);
         validateName(name);
         validatePhone(phone);
-        
+
         if (state == null) {
             throw new IllegalArgumentException("사용자 상태는 null일 수 없습니다.");
         }
@@ -258,21 +294,52 @@ public class User {
     }
 
     // Getter 메서드들
-    public Long getId() { return id; }
-    public String getEmail() { return email; }
-    public UserState getState() { return state; }
-    public UserType getType() { return type; }
-    public String getName() { return name; }
-    public String getPhone() { return phone; }
-    public Point getAvailablePoint() { return availablePoint; }
-    public Point getUsedPoint() { return usedPoint; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public UserState getState() {
+        return state;
+    }
+
+    public UserType getType() {
+        return type;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public Point getAvailablePoint() {
+        return availablePoint;
+    }
+
+    public Point getUsedPoint() {
+        return usedPoint;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         User user = (User) o;
         return Objects.equals(id, user.id);
     }

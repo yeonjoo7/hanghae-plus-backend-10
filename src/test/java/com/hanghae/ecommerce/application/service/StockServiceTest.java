@@ -1,5 +1,6 @@
 package com.hanghae.ecommerce.application.service;
 
+import com.hanghae.ecommerce.application.product.StockService;
 import com.hanghae.ecommerce.domain.product.Product;
 import com.hanghae.ecommerce.domain.product.Money;
 import com.hanghae.ecommerce.domain.product.Quantity;
@@ -32,6 +33,9 @@ class StockServiceTest {
 
     @Mock
     private LockManager lockManager;
+
+    @Mock
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     @InjectMocks
     private StockService stockService;

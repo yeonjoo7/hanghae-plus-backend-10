@@ -1,0 +1,35 @@
+spring:
+  datasource:
+    # Environment variables are REQUIRED - set them in .env file
+    # See .env.example for template
+    url: ${DB_TEST_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+      connection-timeout: 30000
+  
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema.sql
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+    open-in-view: false
+
+logging:
+  level:
+    root: INFO
+    com.hanghae: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.testcontainers: INFO
+

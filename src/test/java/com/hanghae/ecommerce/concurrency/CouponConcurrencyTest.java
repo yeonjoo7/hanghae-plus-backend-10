@@ -1,6 +1,6 @@
 package com.hanghae.ecommerce.concurrency;
 
-import com.hanghae.ecommerce.application.service.CouponService;
+import com.hanghae.ecommerce.application.coupon.CouponService;
 import com.hanghae.ecommerce.domain.coupon.Coupon;
 import com.hanghae.ecommerce.domain.coupon.CouponState;
 import com.hanghae.ecommerce.domain.coupon.DiscountPolicy;
@@ -14,11 +14,14 @@ import com.hanghae.ecommerce.domain.user.UserState;
 import com.hanghae.ecommerce.domain.user.UserType;
 import com.hanghae.ecommerce.domain.user.repository.UserRepository;
 import com.hanghae.ecommerce.infrastructure.lock.LockManager;
+import com.hanghae.ecommerce.support.BaseIntegrationTest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -35,10 +38,13 @@ import static org.assertj.core.api.Assertions.*;
 /**
  * 쿠폰 발급 동시성 제어 테스트
  * 
- * 선착순 쿠폰 발급에서 Race Condition이 발생하지 않는지 검증합니다.
+ * @deprecated 이 테스트는 인메모리 DB를 전제로 작성되어 MySQL 환경에서 실행되지 않습니다.
+ *             대신 {@link CouponIssuanceConcurrencyTest}를 사용하세요.
  */
-@SpringBootTest(classes = com.hanghae.ecommerce.EcommerceApiApplication.class)
-class CouponConcurrencyTest {
+@Disabled("MySQL 기반 새로운 테스트로 대체됨 - CouponIssuanceConcurrencyTest 참조")
+@DisplayName("쿠폰 발급 동시성 테스트 (DEPRECATED)")
+
+class CouponConcurrencyTest extends BaseIntegrationTest {
 
     @Autowired
     private CouponService couponService;
@@ -55,36 +61,58 @@ class CouponConcurrencyTest {
     @Autowired
     private LockManager lockManager;
 
+    @Autowired
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
     private Coupon testCoupon;
     private List<User> testUsers;
 
+    @AfterEach
+    @Transactional
+    void cleanup() {
+        userCouponRepository.deleteAll();
+        couponRepository.deleteAll();
+        userRepository.deleteAll();
+    }
+
     @BeforeEach
-    void setUp() {
-        // 락 매니저 정리
-        lockManager.clearAllLocks();
+    void setUp() throws InterruptedException {
+        org.springframework.transaction.TransactionStatus status = transactionManager.getTransaction(
+                new org.springframework.transaction.support.DefaultTransactionDefinition());
+        try {
+            // 락 매니저 정리
+            lockManager.clearAllLocks();
 
-        // 고유한 타임스탬프로 테스트 데이터 생성
-        long timestamp = System.currentTimeMillis();
+            // 고유한 타임스탬프로 테스트 데이터 생성
+            long timestamp = System.currentTimeMillis();
 
-        // 테스트 쿠폰 생성 (선착순 100명)
-        testCoupon = Coupon.create(
-            "선착순 10% 할인 쿠폰 " + timestamp,
-            DiscountPolicy.rate(10),
-            Quantity.of(100),
-            LocalDateTime.now().minusHours(1),
-            LocalDateTime.now().plusDays(7)
-        );
-        testCoupon = couponRepository.save(testCoupon);
+            // 테스트 쿠폰 생성 (선착순 100명)
+            testCoupon = Coupon.create(
+                    "선착순 10% 할인 쿠폰 " + timestamp,
+                    DiscountPolicy.rate(10),
+                    Quantity.of(100),
+                    LocalDateTime.now().minusHours(1),
+                    LocalDateTime.now().plusDays(7));
+            testCoupon = couponRepository.save(testCoupon);
 
-        // 테스트 사용자 생성 (1000명)
-        testUsers = new ArrayList<>();
-        for (int i = 1; i <= 1000; i++) {
-            User user = User.create(
-                "user" + i + "_" + timestamp + "@test.com",
-                "테스트유저" + i,
-                "010-" + String.format("%04d", i) + "-5678"
-            );
-            testUsers.add(userRepository.save(user));
+            // 테스트 사용자 생성 (1000명)
+            testUsers = new ArrayList<>();
+            for (int i = 1; i <= 1000; i++) {
+                User user = User.create(
+                        "user" + i + "_" + timestamp + "@test.com",
+                        "테스트유저" + i,
+                        "010-" + String.format("%04d", i) + "-5678");
+                testUsers.add(userRepository.save(user));
+            }
+
+            // 명시적으로 트랜잭션 커밋하여 데이터를 DB에 반영
+            transactionManager.commit(status);
+
+            // 데이터가 모든 커넥션에 보이도록 잠시 대기
+            Thread.sleep(100);
+        } catch (Exception e) {
+            transactionManager.rollback(status);
+            throw e;
         }
     }
 
@@ -99,31 +127,32 @@ class CouponConcurrencyTest {
         ExecutorService executorService = Executors.newFixedThreadPool(threadPoolSize);
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch endLatch = new CountDownLatch(totalUsers);
-        
+
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
         List<Exception> exceptions = new ArrayList<>();
 
         // when
         List<CompletableFuture<Void>> futures = new ArrayList<>();
-        
+
         for (int i = 0; i < totalUsers; i++) {
             final User user = testUsers.get(i);
-            
+
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                 try {
                     // 모든 스레드가 동시에 시작하도록 대기
                     startLatch.await();
-                    
+
                     // 쿠폰 발급 시도
-                    UserCoupon issuedCoupon = couponService.issueCoupon(user.getId(), testCoupon.getId());
-                    
+                    UserCoupon issuedCoupon = couponService.issueCoupon(testCoupon.getId(), user.getId());
+
                     if (issuedCoupon != null) {
                         successCount.incrementAndGet();
                     }
-                    
+
                 } catch (Exception e) {
                     failureCount.incrementAndGet();
+                    e.printStackTrace(); // DEBUG
                     synchronized (exceptions) {
                         exceptions.add(e);
                     }
@@ -131,48 +160,48 @@ class CouponConcurrencyTest {
                     endLatch.countDown();
                 }
             }, executorService);
-            
+
             futures.add(future);
         }
 
         // 모든 스레드 동시 시작
         Thread.sleep(100); // 모든 스레드가 대기 상태가 되도록 잠시 대기
         startLatch.countDown();
-        
+
         // 모든 작업 완료 대기 (최대 30초)
         boolean finished = endLatch.await(30, TimeUnit.SECONDS);
-        
+
         // then
         assertThat(finished).isTrue();
-        
+
         // 성공한 발급 건수는 정확히 쿠폰 수량과 일치해야 함
         assertThat(successCount.get()).isEqualTo(totalCouponQuantity);
-        
+
         // 실패한 건수는 나머지와 일치해야 함
         assertThat(failureCount.get()).isEqualTo(totalUsers - totalCouponQuantity);
-        
+
         // 실제 DB에서 발급된 쿠폰 수량 확인
         List<UserCoupon> issuedCoupons = userCouponRepository.findByCouponId(testCoupon.getId());
         assertThat(issuedCoupons).hasSize(totalCouponQuantity);
-        
+
         // 쿠폰의 발급 수량이 정확히 업데이트되었는지 확인
         Coupon updatedCoupon = couponRepository.findById(testCoupon.getId()).orElseThrow();
         assertThat(updatedCoupon.getIssuedQuantity().getValue()).isEqualTo(totalCouponQuantity);
         assertThat(updatedCoupon.getRemainingQuantity().getValue()).isZero();
-        
+
         // 중복 발급이 없는지 확인 (사용자별로 1개씩만 발급)
         List<Long> userIds = issuedCoupons.stream()
                 .map(UserCoupon::getUserId)
                 .distinct()
                 .toList();
         assertThat(userIds).hasSize(totalCouponQuantity);
-        
+
         executorService.shutdown();
-        
+
         // 실패 원인 분석을 위한 로그
-        System.out.printf("성공: %d, 실패: %d, 예외 종류: %d%n", 
-                         successCount.get(), failureCount.get(), exceptions.size());
-        
+        System.out.printf("성공: %d, 실패: %d, 예외 종류: %d%n",
+                successCount.get(), failureCount.get(), exceptions.size());
+
         // 대부분의 실패는 "쿠폰이 모두 소진되었습니다" 또는 "이미 발급받은 쿠폰입니다" 여야 함
         long soldOutExceptions = exceptions.stream()
                 .filter(e -> e.getMessage().contains("소진"))
@@ -180,7 +209,7 @@ class CouponConcurrencyTest {
         long duplicateExceptions = exceptions.stream()
                 .filter(e -> e.getMessage().contains("이미 발급"))
                 .count();
-        
+
         System.out.printf("소진 예외: %d, 중복 예외: %d%n", soldOutExceptions, duplicateExceptions);
     }
 
@@ -190,21 +219,21 @@ class CouponConcurrencyTest {
         // given
         int concurrentUsers = 100;
         int threadPoolSize = 20;
-        
+
         ExecutorService executorService = Executors.newFixedThreadPool(threadPoolSize);
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch endLatch = new CountDownLatch(concurrentUsers);
-        
+
         long startTime = System.currentTimeMillis();
-        
+
         // when
         for (int i = 0; i < concurrentUsers; i++) {
             final User user = testUsers.get(i);
-            
+
             executorService.execute(() -> {
                 try {
                     startLatch.await();
-                    couponService.issueCoupon(user.getId(), testCoupon.getId());
+                    couponService.issueCoupon(testCoupon.getId(), user.getId());
                 } catch (Exception e) {
                     // 성능 테스트이므로 예외는 무시
                 } finally {
@@ -212,7 +241,7 @@ class CouponConcurrencyTest {
                 }
             });
         }
-        
+
         startLatch.countDown();
         boolean finished = endLatch.await(30, TimeUnit.SECONDS);
         long endTime = System.currentTimeMillis();
@@ -224,11 +253,11 @@ class CouponConcurrencyTest {
         double throughput = (double) concurrentUsers / duration * 1000; // TPS
 
         System.out.printf("동시 요청 %d건 처리 시간: %dms, 처리량: %.2f TPS%n",
-                         concurrentUsers, duration, throughput);
+                concurrentUsers, duration, throughput);
 
         // 성능 기준: 100건 요청을 30초 내에 처리해야 함
         assertThat(duration).isLessThan(30000);
-        
+
         executorService.shutdown();
     }
 
@@ -238,30 +267,28 @@ class CouponConcurrencyTest {
         // given
         // 소량 쿠폰 생성 (5개)
         final Coupon limitedCoupon = couponRepository.save(
-            Coupon.create(
-                "초소량 쿠폰",
-                DiscountPolicy.amount(Money.of(1000)),
-                Quantity.of(5),
-                LocalDateTime.now(),
-                LocalDateTime.now().plusHours(1)
-            )
-        );
-        
+                Coupon.create(
+                        "초소량 쿠폰",
+                        DiscountPolicy.amount(Money.of(1000)),
+                        Quantity.of(5),
+                        LocalDateTime.now(),
+                        LocalDateTime.now().plusHours(1)));
+
         int concurrentUsers = 20;
         ExecutorService executorService = Executors.newFixedThreadPool(10);
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch endLatch = new CountDownLatch(concurrentUsers);
-        
+
         AtomicInteger successCount = new AtomicInteger(0);
-        
+
         // when
         for (int i = 0; i < concurrentUsers; i++) {
             final User user = testUsers.get(i);
-            
+
             executorService.execute(() -> {
                 try {
                     startLatch.await();
-                    couponService.issueCoupon(user.getId(), limitedCoupon.getId());
+                    couponService.issueCoupon(limitedCoupon.getId(), user.getId());
                     successCount.incrementAndGet();
                 } catch (Exception e) {
                     // 실패는 정상 (쿠폰 수량 부족)
@@ -270,18 +297,18 @@ class CouponConcurrencyTest {
                 }
             });
         }
-        
+
         startLatch.countDown();
         boolean finished = endLatch.await(5, TimeUnit.SECONDS);
-        
+
         // then
         assertThat(finished).isTrue();
         assertThat(successCount.get()).isEqualTo(5);
-        
+
         // 실제 발급된 쿠폰 수 확인
         List<UserCoupon> issuedCoupons = userCouponRepository.findByCouponId(limitedCoupon.getId());
         assertThat(issuedCoupons).hasSize(5);
-        
+
         executorService.shutdown();
     }
 
@@ -290,7 +317,7 @@ class CouponConcurrencyTest {
     void testLockTimeout() {
         // given
         String lockKey = "test-lock";
-        
+
         // when & then
         // 첫 번째 락 획득
         assertThat(lockManager.executeWithLock(lockKey, () -> {
@@ -302,7 +329,7 @@ class CouponConcurrencyTest {
                     return false;
                 }
             });
-            
+
             try {
                 Thread.sleep(2000); // 2초 대기
                 return future.get();
@@ -319,11 +346,11 @@ class CouponConcurrencyTest {
         int lockCount = 1000;
         ExecutorService executorService = Executors.newFixedThreadPool(50);
         CountDownLatch latch = new CountDownLatch(lockCount);
-        
+
         // when
         for (int i = 0; i < lockCount; i++) {
             final String lockKey = "lock-" + i;
-            
+
             executorService.execute(() -> {
                 try {
                     lockManager.executeWithLock(lockKey, () -> {
@@ -337,14 +364,14 @@ class CouponConcurrencyTest {
                 }
             });
         }
-        
+
         latch.await(30, TimeUnit.SECONDS);
-        
+
         // then
         // 작업 완료 후 활성 락 수가 0이어야 함 (메모리 누수 방지)
         int activeLocks = lockManager.getActiveLockCount();
         assertThat(activeLocks).isZero();
-        
+
         executorService.shutdown();
     }
 }

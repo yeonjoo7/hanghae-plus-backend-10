@@ -1,18 +1,27 @@
 package com.hanghae.ecommerce.domain.order;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
 /**
  * 수령인 정보를 나타내는 Value Object
  */
+@Embeddable
 public class Recipient {
     private static final Pattern PHONE_PATTERN = Pattern.compile(
-        "^\\d{2,3}-\\d{3,4}-\\d{4}$"
-    );
+            "^\\d{2,3}-\\d{3,4}-\\d{4}$");
 
-    private final String name;
-    private final String phone;
+    @Column(name = "recipient_name", length = 100)
+    private String name;
+
+    @Column(name = "recipient_phone", length = 20)
+    private String phone;
+
+    // JPA를 위한 기본 생성자
+    protected Recipient() {
+    }
 
     private Recipient(String name, String phone) {
         this.name = name;
@@ -52,13 +61,20 @@ public class Recipient {
     }
 
     // Getter 메서드들
-    public String getName() { return name; }
-    public String getPhone() { return phone; }
+    public String getName() {
+        return name;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Recipient recipient = (Recipient) o;
         return Objects.equals(name, recipient.name) &&
                 Objects.equals(phone, recipient.phone);

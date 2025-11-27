@@ -1,12 +1,20 @@
 package com.hanghae.ecommerce.domain.product;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
 import java.util.Objects;
 
 /**
  * 수량을 나타내는 Value Object
  */
+@Embeddable
 public class Quantity {
-    private final int value;
+    @Column(name = "value")
+    private int value;
+
+    // JPA를 위한 기본 생성자
+    protected Quantity() {
+    }
 
     private Quantity(int value) {
         validateQuantity(value);
@@ -100,8 +108,10 @@ public class Quantity {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Quantity quantity = (Quantity) o;
         return value == quantity.value;
     }
