@@ -9,6 +9,7 @@ import com.hanghae.ecommerce.domain.coupon.repository.UserCouponRepository;
 import com.hanghae.ecommerce.presentation.exception.CouponAlreadyIssuedException;
 import com.hanghae.ecommerce.presentation.exception.CouponNotFoundException;
 import com.hanghae.ecommerce.domain.user.repository.UserRepository;
+import com.hanghae.ecommerce.infrastructure.lock.LockManager;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,68 +27,78 @@ public class CouponService {
     private final CouponRepository couponRepository;
     private final UserCouponRepository userCouponRepository;
     private final UserRepository userRepository;
+    private final LockManager lockManager;
+    private final org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     public CouponService(JdbcTemplate jdbcTemplate,
             CouponRepository couponRepository,
             UserCouponRepository userCouponRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            LockManager lockManager,
+            org.springframework.transaction.PlatformTransactionManager transactionManager) {
         this.jdbcTemplate = jdbcTemplate;
         this.couponRepository = couponRepository;
         this.userCouponRepository = userCouponRepository;
         this.userRepository = userRepository;
+        this.lockManager = lockManager;
+        this.transactionManager = transactionManager;
     }
 
-    @Transactional
     public UserCoupon issueCoupon(Long couponId, Long userId) {
-        // 0. 사용자 존재 확인
+        if (couponId == null || userId == null) {
+            throw new IllegalArgumentException("쿠폰 ID와 사용자 ID는 null일 수 없습니다.");
+        }
+
+        // 0. 사용자 존재 확인 (락 획득 전)
         userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다. ID: " + userId));
 
-        // 1. 중복 발급 체크 (락 획득 전에 먼저 체크)
+        // 1. 중복 발급 체크 (락 획득 전)
         var existingCoupons = userCouponRepository.findByUserIdAndCouponId(userId, couponId);
         if (!existingCoupons.isEmpty()) {
             throw new CouponAlreadyIssuedException();
         }
 
-        // 2. 쿠폰 정보 조회 및 락
-        List<Map<String, Object>> coupons = jdbcTemplate.queryForList(
-                """
-                        SELECT * FROM coupons
-                        WHERE id = ?
-                        FOR UPDATE
-                        """,
-                couponId);
+        String lockKey = "coupon:" + couponId;
 
-        if (coupons.isEmpty()) {
-            throw new CouponNotFoundException(Long.valueOf(couponId));
-        }
+        return lockManager.executeWithLock(lockKey, () -> {
+            org.springframework.transaction.support.TransactionTemplate template = new org.springframework.transaction.support.TransactionTemplate(
+                    transactionManager);
+            template.setPropagationBehavior(
+                    org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
-        Map<String, Object> couponData = coupons.get(0);
-        // 수량 체크는 UPDATE 문에서 원자적으로 수행됩니다
+            return template.execute(status -> {
+                // 2. 중복 발급 재확인 (락 획득 후, Race Condition 방지)
+                var recheck = userCouponRepository.findByUserIdAndCouponId(userId, couponId);
+                if (!recheck.isEmpty()) {
+                    throw new CouponAlreadyIssuedException();
+                }
 
-        // 3. 쿠폰 수량 증가 (원자적 업데이트 with 수량 체크)
-        int updatedRows = jdbcTemplate.update(
-                "UPDATE coupons SET issued_quantity = issued_quantity + 1 WHERE id = ? AND issued_quantity < total_quantity",
-                couponId);
+                // 3. 쿠폰 정보 조회
+                Coupon coupon = couponRepository.findById(couponId)
+                        .orElseThrow(() -> new CouponNotFoundException(couponId));
 
-        // 업데이트 실패 시 (다른 트랜잭션이 먼저 소진시킴)
-        if (updatedRows == 0) {
-            throw new IllegalStateException("쿠폰이 모두 소진되었습니다.");
-        }
+                // 4. 쿠폰 수량 증가 (원자적 업데이트 with 수량 체크)
+                int updatedRows = jdbcTemplate.update(
+                        "UPDATE coupons SET issued_quantity = issued_quantity + 1 WHERE id = ? AND issued_quantity < total_quantity",
+                        couponId);
 
-        // 4. 사용자 쿠폰 발급
-        LocalDateTime expiresAt = LocalDateTime.now().plusDays(7);
+                // 업데이트 실패 시 (다른 트랜잭션이 먼저 소진시킴)
+                if (updatedRows == 0) {
+                    throw new IllegalStateException("쿠폰이 모두 소진되었습니다.");
+                }
 
-        UserCoupon userCoupon = UserCoupon.issue(
-                Long.valueOf(userId),
-                Long.valueOf(couponId),
-                expiresAt);
+                // 5. 사용자 쿠폰 발급
+                LocalDateTime expiresAt = LocalDateTime.now().plusDays(7);
 
-        UserCoupon savedUserCoupon = userCouponRepository.save(userCoupon);
+                UserCoupon userCoupon = UserCoupon.issue(
+                        userId,
+                        couponId,
+                        expiresAt);
 
-        // 남은 수량 정보는 도메인 객체에서 처리됩니다
-
-        return savedUserCoupon;
+                return userCouponRepository.save(userCoupon);
+            });
+        });
     }
 
     public Coupon getCoupon(String couponId) {
