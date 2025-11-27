@@ -5,8 +5,11 @@ import com.hanghae.ecommerce.domain.product.Product;
 import com.hanghae.ecommerce.domain.product.Stock;
 import com.hanghae.ecommerce.domain.product.repository.ProductRepository;
 import com.hanghae.ecommerce.domain.product.repository.StockRepository;
+import com.hanghae.ecommerce.infrastructure.cache.RedisCacheService;
 import org.springframework.stereotype.Service;
 
+import java.io.Serializable;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +19,15 @@ import java.util.stream.Collectors;
 /**
  * 상품 관리 서비스
  * 상품 조회, 인기 상품 조회 등의 비즈니스 로직을 처리합니다.
+ * 
+ * ## Redis 캐싱 전략
+ * - 상품 상세 조회: Cache Aside 패턴 (TTL 30분)
+ * - 상품+재고 조회: Cache Aside 패턴 (TTL 5분, 재고 변동이 잦음)
+ * - Cache Stampede 방지: 분산락 기반 캐시 갱신
+ * 
+ * ## 캐시 무효화
+ * - 상품 정보 수정 시 관련 캐시 무효화
+ * - 재고 변경 시 productWithStock 캐시 무효화
  */
 @Service
 public class ProductService {
@@ -23,23 +35,61 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final StockRepository stockRepository;
     private final OrderItemRepository orderItemRepository;
+    private final RedisCacheService redisCacheService;
+
+    // 캐시 설정
+    private static final String PRODUCT_CACHE_PREFIX = "product:";
+    private static final String PRODUCT_WITH_STOCK_CACHE_PREFIX = "product-with-stock:";
+    private static final Duration PRODUCT_CACHE_TTL = Duration.ofMinutes(30);
+    private static final Duration PRODUCT_WITH_STOCK_CACHE_TTL = Duration.ofMinutes(5);
 
     public ProductService(ProductRepository productRepository,
             StockRepository stockRepository,
-            OrderItemRepository orderItemRepository) {
+            OrderItemRepository orderItemRepository,
+            RedisCacheService redisCacheService) {
         this.productRepository = productRepository;
         this.stockRepository = stockRepository;
         this.orderItemRepository = orderItemRepository;
+        this.redisCacheService = redisCacheService;
     }
 
     /**
-     * 상품 상세 조회
+     * 상품 상세 조회 (Redis 캐싱 적용)
+     * 
+     * 캐시 전략:
+     * - TTL: 30분 (상품 정보는 자주 변경되지 않음)
+     * - Cache Stampede 방지: 분산락 사용
      * 
      * @param productId 상품 ID
      * @return 상품 정보
      * @throws IllegalArgumentException 상품을 찾을 수 없는 경우
      */
     public Product getProduct(Long productId) {
+        String cacheKey = PRODUCT_CACHE_PREFIX + productId;
+        
+        ProductCacheData cachedData = redisCacheService.getOrLoad(
+            cacheKey,
+            ProductCacheData.class,
+            PRODUCT_CACHE_TTL,
+            () -> {
+                Product product = productRepository.findById(productId)
+                        .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId));
+                return ProductCacheData.from(product);
+            }
+        );
+        
+        if (cachedData == null) {
+            throw new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId);
+        }
+        
+        return cachedData.toProduct();
+    }
+    
+    /**
+     * 캐시를 사용하지 않고 직접 DB에서 상품 조회
+     * (캐시 갱신이나 관리용)
+     */
+    public Product getProductDirect(Long productId) {
         return productRepository.findById(productId)
                 .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId));
     }
@@ -74,18 +124,69 @@ public class ProductService {
     }
 
     /**
-     * 상품과 재고 정보 함께 조회
+     * 상품과 재고 정보 함께 조회 (Redis 캐싱 적용)
+     * 
+     * 캐시 전략:
+     * - TTL: 5분 (재고는 자주 변경됨)
+     * - Cache Stampede 방지: 분산락 사용
+     * - 재고 변경 시 캐시 무효화 필요
      * 
      * @param productId 상품 ID
      * @return 상품과 재고 정보의 쌍 (Product, Stock)
      * @throws IllegalArgumentException 상품 또는 재고를 찾을 수 없는 경우
      */
     public ProductWithStock getProductWithStock(Long productId) {
-        Product product = getProduct(productId);
-        Stock stock = stockRepository.findByProductIdAndProductOptionIdIsNull(productId)
-                .orElseThrow(() -> new IllegalArgumentException("상품 재고를 찾을 수 없습니다. ProductID: " + productId));
-
-        return new ProductWithStock(product, stock);
+        String cacheKey = PRODUCT_WITH_STOCK_CACHE_PREFIX + productId;
+        
+        ProductWithStockCacheData cachedData = redisCacheService.getOrLoad(
+            cacheKey,
+            ProductWithStockCacheData.class,
+            PRODUCT_WITH_STOCK_CACHE_TTL,
+            () -> {
+                Product product = getProductDirect(productId);
+                Stock stock = stockRepository.findByProductIdAndProductOptionIdIsNull(productId)
+                        .orElseThrow(() -> new IllegalArgumentException("상품 재고를 찾을 수 없습니다. ProductID: " + productId));
+                return ProductWithStockCacheData.from(product, stock);
+            }
+        );
+        
+        if (cachedData == null) {
+            throw new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId);
+        }
+        
+        return cachedData.toProductWithStock();
+    }
+    
+    /**
+     * 상품 캐시 무효화
+     * 상품 정보가 수정되었을 때 호출
+     * 
+     * @param productId 상품 ID
+     */
+    public void invalidateProductCache(Long productId) {
+        redisCacheService.delete(PRODUCT_CACHE_PREFIX + productId);
+        redisCacheService.delete(PRODUCT_WITH_STOCK_CACHE_PREFIX + productId);
+    }
+    
+    /**
+     * 상품+재고 캐시 무효화
+     * 재고가 변경되었을 때 호출 (주문, 재고 차감 등)
+     * 
+     * @param productId 상품 ID
+     */
+    public void invalidateProductWithStockCache(Long productId) {
+        redisCacheService.delete(PRODUCT_WITH_STOCK_CACHE_PREFIX + productId);
+    }
+    
+    /**
+     * 여러 상품의 캐시 무효화
+     * 
+     * @param productIds 상품 ID 목록
+     */
+    public void invalidateProductCaches(List<Long> productIds) {
+        for (Long productId : productIds) {
+            invalidateProductCache(productId);
+        }
     }
 
     /**
@@ -307,5 +408,128 @@ public class ProductService {
         public int getSalesCount() {
             return salesCount;
         }
+    }
+    
+    /**
+     * 상품 캐시용 데이터 클래스
+     * Entity를 직접 캐싱하지 않고 필요한 데이터만 추출하여 저장
+     */
+    public static class ProductCacheData implements Serializable {
+        private static final long serialVersionUID = 1L;
+        
+        private Long id;
+        private String name;
+        private String description;
+        private Integer price;
+        private Integer limitedQuantity;
+        private String state;
+        private LocalDateTime createdAt;
+        private LocalDateTime updatedAt;
+        
+        public ProductCacheData() {}
+        
+        public static ProductCacheData from(Product product) {
+            ProductCacheData data = new ProductCacheData();
+            data.id = product.getId();
+            data.name = product.getName();
+            data.description = product.getDescription();
+            data.price = product.getPrice() != null ? product.getPrice().getValue() : null;
+            data.limitedQuantity = product.getLimitedQuantity() != null ? product.getLimitedQuantity().getValue() : null;
+            data.state = product.getState() != null ? product.getState().name() : null;
+            data.createdAt = product.getCreatedAt();
+            data.updatedAt = product.getUpdatedAt();
+            return data;
+        }
+        
+        public Product toProduct() {
+            return Product.restore(
+                id,
+                com.hanghae.ecommerce.domain.product.ProductState.valueOf(state),
+                name,
+                description,
+                com.hanghae.ecommerce.domain.product.Money.of(price),
+                limitedQuantity != null ? com.hanghae.ecommerce.domain.product.Quantity.of(limitedQuantity) : null,
+                createdAt,
+                updatedAt
+            );
+        }
+        
+        // Getters and Setters for JSON serialization
+        public Long getId() { return id; }
+        public void setId(Long id) { this.id = id; }
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+        public String getDescription() { return description; }
+        public void setDescription(String description) { this.description = description; }
+        public Integer getPrice() { return price; }
+        public void setPrice(Integer price) { this.price = price; }
+        public Integer getLimitedQuantity() { return limitedQuantity; }
+        public void setLimitedQuantity(Integer limitedQuantity) { this.limitedQuantity = limitedQuantity; }
+        public String getState() { return state; }
+        public void setState(String state) { this.state = state; }
+        public LocalDateTime getCreatedAt() { return createdAt; }
+        public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+        public LocalDateTime getUpdatedAt() { return updatedAt; }
+        public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    }
+    
+    /**
+     * 상품+재고 캐시용 데이터 클래스
+     */
+    public static class ProductWithStockCacheData implements Serializable {
+        private static final long serialVersionUID = 1L;
+        
+        private ProductCacheData product;
+        private Long stockId;
+        private Long stockProductId;
+        private Integer availableQuantity;
+        private Integer soldQuantity;
+        private LocalDateTime stockCreatedAt;
+        private LocalDateTime stockUpdatedAt;
+        
+        public ProductWithStockCacheData() {}
+        
+        public static ProductWithStockCacheData from(Product product, Stock stock) {
+            ProductWithStockCacheData data = new ProductWithStockCacheData();
+            data.product = ProductCacheData.from(product);
+            data.stockId = stock.getId();
+            data.stockProductId = stock.getProductId();
+            data.availableQuantity = stock.getAvailableQuantity() != null ? stock.getAvailableQuantity().getValue() : 0;
+            data.soldQuantity = stock.getSoldQuantity() != null ? stock.getSoldQuantity().getValue() : 0;
+            data.stockCreatedAt = stock.getCreatedAt();
+            data.stockUpdatedAt = stock.getUpdatedAt();
+            return data;
+        }
+        
+        public ProductWithStock toProductWithStock() {
+            Product restoredProduct = product.toProduct();
+            Stock restoredStock = Stock.restore(
+                stockId,
+                stockProductId,
+                null, // productOptionId
+                com.hanghae.ecommerce.domain.product.Quantity.of(availableQuantity),
+                com.hanghae.ecommerce.domain.product.Quantity.of(soldQuantity),
+                null, // memo
+                stockCreatedAt,
+                stockUpdatedAt
+            );
+            return new ProductWithStock(restoredProduct, restoredStock);
+        }
+        
+        // Getters and Setters
+        public ProductCacheData getProduct() { return product; }
+        public void setProduct(ProductCacheData product) { this.product = product; }
+        public Long getStockId() { return stockId; }
+        public void setStockId(Long stockId) { this.stockId = stockId; }
+        public Long getStockProductId() { return stockProductId; }
+        public void setStockProductId(Long stockProductId) { this.stockProductId = stockProductId; }
+        public Integer getAvailableQuantity() { return availableQuantity; }
+        public void setAvailableQuantity(Integer availableQuantity) { this.availableQuantity = availableQuantity; }
+        public Integer getSoldQuantity() { return soldQuantity; }
+        public void setSoldQuantity(Integer soldQuantity) { this.soldQuantity = soldQuantity; }
+        public LocalDateTime getStockCreatedAt() { return stockCreatedAt; }
+        public void setStockCreatedAt(LocalDateTime stockCreatedAt) { this.stockCreatedAt = stockCreatedAt; }
+        public LocalDateTime getStockUpdatedAt() { return stockUpdatedAt; }
+        public void setStockUpdatedAt(LocalDateTime stockUpdatedAt) { this.stockUpdatedAt = stockUpdatedAt; }
     }
 }

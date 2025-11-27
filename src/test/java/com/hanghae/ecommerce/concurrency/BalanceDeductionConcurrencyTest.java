@@ -343,4 +343,182 @@ class BalanceDeductionConcurrencyTest extends BaseConcurrencyTest {
     User updatedUser = userRepository.findById(testUser.getId()).orElseThrow();
     assertThat(updatedUser.getAvailablePoint().getValue()).isEqualTo(500000);
   }
+
+  @Test
+  @DisplayName("분산 락 동작 검증 - 동일 주문에 대한 중복 결제 방지")
+  void testDistributedLockPreventsDuplicatePayment() throws Exception {
+    // given: 1명의 사용자 (100,000원)와 1개 상품
+    final User testUser = createUserInNewTransaction("lock-test@example.com", "락테스트유저", 100000);
+    List<Product> products = createProductsInNewTransaction(1, 10000, 10);
+    Product product = products.get(0);
+
+    // 카트 생성 및 아이템 추가
+    createCartInNewTransaction(testUser.getId());
+
+    // 장바구니에 추가
+    String addToCartRequest = String.format("{\"productId\": %d, \"quantity\": 1}", product.getId());
+    MvcResult cartResult = mockMvc.perform(
+        post("/carts/items")
+            .header("Authorization", "Bearer " + generateToken(testUser))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(addToCartRequest))
+        .andReturn();
+
+    assertThat(cartResult.getResponse().getStatus()).isEqualTo(201);
+    Long cartItemId = extractCartItemId(cartResult.getResponse().getContentAsString());
+
+    // 주문 생성
+    MvcResult orderResult = mockMvc.perform(
+        post("/orders")
+            .header("Authorization", "Bearer " + generateToken(testUser))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(createOrderRequest(cartItemId)))
+        .andReturn();
+
+    assertThat(orderResult.getResponse().getStatus()).isEqualTo(201);
+    Long orderId = extractOrderId(orderResult.getResponse().getContentAsString());
+
+    // when: 동일 주문에 대해 10번 동시 결제 시도
+    int attemptCount = 10;
+    ExecutorService executor = Executors.newFixedThreadPool(10);
+    CountDownLatch startLatch = new CountDownLatch(1);
+    CountDownLatch doneLatch = new CountDownLatch(attemptCount);
+    AtomicInteger successCount = new AtomicInteger(0);
+    AtomicInteger duplicatePaymentCount = new AtomicInteger(0);
+
+    for (int i = 0; i < attemptCount; i++) {
+      executor.submit(() -> {
+        try {
+          startLatch.await();
+
+          MvcResult paymentResult = mockMvc.perform(
+              post("/orders/{orderId}/payment", orderId)
+                  .header("Authorization", "Bearer " + generateToken(testUser))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content("{\"paymentMethod\": \"POINT\"}"))
+              .andReturn();
+
+          if (paymentResult.getResponse().getStatus() == 200) {
+            successCount.incrementAndGet();
+          } else if (paymentResult.getResponse().getStatus() == 409 ||
+              paymentResult.getResponse().getContentAsString().contains("already")) {
+            duplicatePaymentCount.incrementAndGet();
+          }
+        } catch (Exception e) {
+          // 중복 결제 방지로 인한 실패는 정상
+        } finally {
+          doneLatch.countDown();
+        }
+      });
+    }
+
+    startLatch.countDown();
+    boolean completed = doneLatch.await(30, TimeUnit.SECONDS);
+    executor.shutdown();
+
+    // then: 정확히 1번만 성공
+    System.out.println("=== Distributed Lock Test Results ===");
+    System.out.println("Success count: " + successCount.get());
+    System.out.println("Duplicate payment attempts blocked: " + duplicatePaymentCount.get());
+
+    assertThat(completed).isTrue();
+    assertThat(successCount.get())
+        .as("Only one payment should succeed due to distributed lock")
+        .isEqualTo(1);
+
+    // 사용자의 잔액 확인 (100,000 - 10,000 = 90,000)
+    User updatedUser = userRepository.findById(testUser.getId()).orElseThrow();
+    assertThat(updatedUser.getAvailablePoint().getValue()).isEqualTo(90000);
+  }
+
+  @Test
+  @DisplayName("분산 락 동작 검증 - 동일 사용자의 동시 결제 시 잔액 정합성 보장")
+  void testDistributedLockEnsuresBalanceConsistency() throws Exception {
+    // given: 1명의 사용자 (50,000원)와 10개 상품 (각 10,000원)
+    // 5개만 구매 가능하고, 분산락으로 인해 정확히 5개만 성공해야 함
+    final User testUser = createUserInNewTransaction("balance-lock@example.com", "잔액락테스트", 50000);
+    List<Product> products = createProductsInNewTransaction(10, 10000, 100);
+
+    createCartInNewTransaction(testUser.getId());
+
+    ExecutorService executor = Executors.newFixedThreadPool(10);
+    CountDownLatch startLatch = new CountDownLatch(1);
+    CountDownLatch doneLatch = new CountDownLatch(products.size());
+    AtomicInteger successCount = new AtomicInteger(0);
+    ConcurrentHashMap<Long, Long> threadTimestamps = new ConcurrentHashMap<>();
+
+    // when: 10개 상품을 동시에 주문 시도
+    for (Product product : products) {
+      executor.submit(() -> {
+        try {
+          startLatch.await();
+          long startTime = System.nanoTime();
+
+          String addToCartRequest = String.format("{\"productId\": %d, \"quantity\": 1}", product.getId());
+          MvcResult cartResult = mockMvc.perform(
+              post("/carts/items")
+                  .header("Authorization", "Bearer " + generateToken(testUser))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(addToCartRequest))
+              .andReturn();
+
+          if (cartResult.getResponse().getStatus() == 201) {
+            Long cartItemId = extractCartItemId(cartResult.getResponse().getContentAsString());
+
+            MvcResult orderResult = mockMvc.perform(
+                post("/orders")
+                    .header("Authorization", "Bearer " + generateToken(testUser))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(createOrderRequest(cartItemId)))
+                .andReturn();
+
+            if (orderResult.getResponse().getStatus() == 201) {
+              Long orderId = extractOrderId(orderResult.getResponse().getContentAsString());
+
+              MvcResult paymentResult = mockMvc.perform(
+                  post("/orders/{orderId}/payment", orderId)
+                      .header("Authorization", "Bearer " + generateToken(testUser))
+                      .contentType(MediaType.APPLICATION_JSON)
+                      .content("{\"paymentMethod\": \"POINT\"}"))
+                  .andReturn();
+
+              if (paymentResult.getResponse().getStatus() == 200) {
+                long endTime = System.nanoTime();
+                threadTimestamps.put(Thread.currentThread().getId(), endTime - startTime);
+                successCount.incrementAndGet();
+              }
+            }
+          }
+        } catch (Exception e) {
+          // 잔액 부족으로 인한 실패는 정상
+        } finally {
+          doneLatch.countDown();
+        }
+      });
+    }
+
+    startLatch.countDown();
+    boolean completed = doneLatch.await(60, TimeUnit.SECONDS);
+    executor.shutdown();
+
+    // then: 정확히 5개만 성공 (분산락으로 순차 처리되어 잔액 정합성 보장)
+    System.out.println("=== Balance Consistency Test Results ===");
+    System.out.println("Success count: " + successCount.get() + "/5 expected");
+    System.out.println("Average processing time: " +
+        threadTimestamps.values().stream()
+            .mapToLong(Long::longValue)
+            .average()
+            .orElse(0) / 1_000_000 + "ms");
+
+    assertThat(completed).isTrue();
+    assertThat(successCount.get())
+        .as("Only 5 payments should succeed (50,000 / 10,000 = 5)")
+        .isEqualTo(5);
+
+    // 사용자의 잔액이 정확히 0원이어야 함
+    User updatedUser = userRepository.findById(testUser.getId()).orElseThrow();
+    assertThat(updatedUser.getAvailablePoint().getValue())
+        .as("Balance should be exactly 0 after 5 successful payments")
+        .isEqualTo(0);
+  }
 }

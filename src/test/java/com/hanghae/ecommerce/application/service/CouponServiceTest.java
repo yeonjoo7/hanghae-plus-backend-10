@@ -11,19 +11,18 @@ import com.hanghae.ecommerce.domain.coupon.repository.UserCouponRepository;
 import com.hanghae.ecommerce.domain.product.Quantity;
 import com.hanghae.ecommerce.domain.user.User;
 import com.hanghae.ecommerce.domain.user.repository.UserRepository;
-import com.hanghae.ecommerce.application.coupon.CouponService;
+import com.hanghae.ecommerce.infrastructure.lock.LockManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
@@ -45,7 +44,12 @@ class CouponServiceTest {
     @Mock
     private JdbcTemplate jdbcTemplate;
 
-    @InjectMocks
+    @Mock
+    private LockManager lockManager;
+
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
     private CouponService couponService;
 
     private User testUser;
@@ -53,6 +57,14 @@ class CouponServiceTest {
 
     @BeforeEach
     void setUp() {
+        couponService = new CouponService(
+                jdbcTemplate,
+                couponRepository,
+                userCouponRepository,
+                userRepository,
+                lockManager,
+                transactionManager);
+
         testUser = User.create("test@example.com", "테스트", "010-1234-5678");
         testCoupon = Coupon.create(
                 "테스트 쿠폰",
@@ -70,20 +82,18 @@ class CouponServiceTest {
         Long couponId = 1L;
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
-
-        // Mock JdbcTemplate for coupon query
-        Map<String, Object> couponMap = java.util.Map.of(
-                "total_quantity", 100,
-                "issued_quantity", 0);
-        // Use any() for the varargs
-        when(jdbcTemplate.queryForList(anyString(), eq(couponId))).thenReturn(List.of(couponMap));
-        // jdbcTemplate.update가 1을 반환하도록 설정 (업데이트 성공)
-        when(jdbcTemplate.update(anyString(), eq(couponId))).thenReturn(1);
-
         when(userCouponRepository.findByUserIdAndCouponId(userId, couponId)).thenReturn(List.of());
+
+        // lockManager.executeWithLock이 람다를 실행하도록 mock
+        when(lockManager.executeWithLock(anyString(), any())).thenAnswer(invocation -> {
+            LockManager.LockTask<?> task = invocation.getArgument(1);
+            return task.execute();
+        });
+
+        // TransactionTemplate 내부에서 호출되는 것들 mock
+        when(couponRepository.findById(couponId)).thenReturn(Optional.of(testCoupon));
+        when(jdbcTemplate.update(anyString(), eq(couponId))).thenReturn(1);
         when(userCouponRepository.save(any(UserCoupon.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        // couponRepository.save is not called in implementation anymore, it uses
-        // jdbcTemplate.update
 
         // when
         UserCoupon result = couponService.issueCoupon(couponId, userId);
@@ -93,7 +103,7 @@ class CouponServiceTest {
         assertThat(result.getUserId()).isEqualTo(userId);
         assertThat(result.getCouponId()).isEqualTo(couponId);
         verify(userCouponRepository).save(any(UserCoupon.class));
-        verify(jdbcTemplate).update(anyString(), any(Object.class));
+        verify(jdbcTemplate).update(anyString(), eq(couponId));
     }
 
     @Test
@@ -119,7 +129,16 @@ class CouponServiceTest {
         Long couponId = 1L;
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
-        when(jdbcTemplate.queryForList(anyString(), eq(couponId))).thenReturn(List.of());
+        when(userCouponRepository.findByUserIdAndCouponId(userId, couponId)).thenReturn(List.of());
+
+        // lockManager.executeWithLock이 람다를 실행하도록 mock
+        when(lockManager.executeWithLock(anyString(), any())).thenAnswer(invocation -> {
+            LockManager.LockTask<?> task = invocation.getArgument(1);
+            return task.execute();
+        });
+
+        // 쿠폰이 존재하지 않음
+        when(couponRepository.findById(couponId)).thenReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> couponService.issueCoupon(couponId, userId))
@@ -153,15 +172,22 @@ class CouponServiceTest {
         Long couponId = 1L;
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
-        // Mock JdbcTemplate to return empty list (query has condition issued < total)
-        when(jdbcTemplate.queryForList(anyString(), eq(couponId))).thenReturn(List.of());
+        when(userCouponRepository.findByUserIdAndCouponId(userId, couponId)).thenReturn(List.of());
+
+        // lockManager.executeWithLock이 람다를 실행하도록 mock
+        when(lockManager.executeWithLock(anyString(), any())).thenAnswer(invocation -> {
+            LockManager.LockTask<?> task = invocation.getArgument(1);
+            return task.execute();
+        });
+
+        // 쿠폰은 존재하지만 jdbcTemplate.update가 0을 반환 (수량 소진)
+        when(couponRepository.findById(couponId)).thenReturn(Optional.of(testCoupon));
+        when(jdbcTemplate.update(anyString(), eq(couponId))).thenReturn(0);
 
         // when & then
         assertThatThrownBy(() -> couponService.issueCoupon(couponId, userId))
-                .isInstanceOf(com.hanghae.ecommerce.presentation.exception.CouponNotFoundException.class);
-        // Note: The implementation throws CouponNotFoundException if query returns
-        // empty,
-        // which happens if issued >= total due to the WHERE clause.
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("쿠폰이 모두 소진되었습니다");
     }
 
     @Test

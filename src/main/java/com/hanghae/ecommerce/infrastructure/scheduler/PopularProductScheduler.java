@@ -58,27 +58,24 @@ public class PopularProductScheduler {
     }
 
     /**
-     * 캐시 통계 리포트 (1시간마다 실행)
+     * 판매량 통계 리포트 (1시간마다 실행)
      * 
-     * 캐시 성능을 모니터링하기 위한 통계를 출력합니다.
+     * 판매량 집계 현황을 모니터링하기 위한 통계를 출력합니다.
      * 프로덕션에서는 로깅 시스템으로 전송하거나 메트릭으로 수집할 수 있습니다.
      */
     @Scheduled(fixedRate = 3600000) // 1시간 = 3,600,000ms
-    public void reportCacheStats() {
+    public void reportSalesStats() {
         try {
-            var stats = popularProductService.getCacheStats();
+            var stats = popularProductService.getSalesStats();
             
             System.out.printf(
-                "[캐시 통계] 히트: %d, 미스: %d, 히트율: %.2f%%, " +
-                "추적 일수: %d, 추적 상품수: %d%n",
-                stats.getHitCount(),
-                stats.getMissCount(),
-                stats.getHitRate() * 100,
+                "[판매량 통계] 추적 일수: %d, 추적 상품수: %d, 총 판매량: %d%n",
                 stats.getTotalDaysTracked(),
-                stats.getTotalProductsTracked()
+                stats.getTotalProductsTracked(),
+                stats.getTotalSales()
             );
         } catch (Exception e) {
-            System.err.println("캐시 통계 리포트 실패: " + e.getMessage());
+            System.err.println("판매량 통계 리포트 실패: " + e.getMessage());
         }
     }
 

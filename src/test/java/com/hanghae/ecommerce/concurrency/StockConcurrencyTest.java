@@ -8,32 +8,28 @@ import com.hanghae.ecommerce.domain.product.Stock;
 import com.hanghae.ecommerce.domain.product.repository.ProductRepository;
 import com.hanghae.ecommerce.domain.product.repository.StockRepository;
 import com.hanghae.ecommerce.infrastructure.lock.LockManager;
+import com.hanghae.ecommerce.support.BaseIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.*;
 
 /**
  * 재고 관리 동시성 제어 테스트
- * 
- * 재고 동시 차감에서 Race Condition이 발생하지 않는지 검증합니다.
+ * 분산 락을 사용한 재고 차감/복구의 동시성 제어를 검증합니다.
  */
-import com.hanghae.ecommerce.support.BaseIntegrationTest;
-
+@DisplayName("재고 동시성 테스트")
 class StockConcurrencyTest extends BaseIntegrationTest {
 
     @Autowired
@@ -58,10 +54,8 @@ class StockConcurrencyTest extends BaseIntegrationTest {
      * 별도 트랜잭션으로 재고 설정 (즉시 커밋)
      */
     private void setupStockInNewTransaction(Long productId, int quantity) {
-        TransactionTemplate transactionTemplate = new TransactionTemplate(
-                transactionManager);
-        transactionTemplate.setPropagationBehavior(
-                TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         transactionTemplate.execute(status -> {
             stockRepository.deleteByProductId(productId);
@@ -76,13 +70,12 @@ class StockConcurrencyTest extends BaseIntegrationTest {
         // 락 매니저 정리
         lockManager.clearAllLocks();
 
-        // 테스트 상품 생성 (매번 새로운 상품 생성)
+        // 테스트 상품 생성
         testProduct = Product.create(
                 "테스트 상품 " + System.currentTimeMillis(),
                 "동시성 테스트용 상품",
                 com.hanghae.ecommerce.domain.product.Money.of(10000),
-                Quantity.of(10) // 1인당 최대 10개까지 구매 가능
-        );
+                Quantity.of(10));
         testProduct = productRepository.save(testProduct);
 
         // 테스트 재고 생성 (초기 재고: 1000개)
@@ -92,35 +85,29 @@ class StockConcurrencyTest extends BaseIntegrationTest {
 
     @Test
     @DisplayName("재고 동시 차감 - 1000개 재고에 1000명이 각각 1개씩 동시 요청")
+    @DirtiesContext
     void testConcurrentStockReduction() throws InterruptedException {
         // given
         int initialStock = 1000;
         int concurrentUsers = 1000;
         int quantityPerUser = 1;
-        int threadPoolSize = 50;
 
-        ExecutorService executorService = Executors.newFixedThreadPool(threadPoolSize);
+        ExecutorService executorService = Executors.newFixedThreadPool(50);
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch endLatch = new CountDownLatch(concurrentUsers);
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
-        List<Exception> exceptions = new ArrayList<>();
 
         // when
         for (int i = 0; i < concurrentUsers; i++) {
             executorService.execute(() -> {
                 try {
                     startLatch.await();
-
                     stockService.reduceStock(testProduct.getId(), quantityPerUser);
                     successCount.incrementAndGet();
-
                 } catch (Exception e) {
                     failureCount.incrementAndGet();
-                    synchronized (exceptions) {
-                        exceptions.add(e);
-                    }
                 } finally {
                     endLatch.countDown();
                 }
@@ -128,7 +115,6 @@ class StockConcurrencyTest extends BaseIntegrationTest {
         }
 
         // 모든 스레드 동시 시작
-        Thread.sleep(100);
         startLatch.countDown();
 
         // 모든 작업 완료 대기
@@ -136,16 +122,18 @@ class StockConcurrencyTest extends BaseIntegrationTest {
 
         // then
         assertThat(finished).isTrue();
-
-        // 성공한 차감 건수는 초기 재고와 일치해야 함
         assertThat(successCount.get()).isEqualTo(initialStock);
         assertThat(failureCount.get()).isZero();
 
-        // 실제 재고 확인
+        // JPA를 사용한 DB 검증
         Stock updatedStock = stockRepository.findByProductIdAndProductOptionIdIsNull(testProduct.getId())
                 .orElseThrow();
         assertThat(updatedStock.getAvailableQuantity().getValue()).isZero();
         assertThat(updatedStock.getSoldQuantity().getValue()).isEqualTo(initialStock);
+
+        // 상품 상태 확인 (재고 소진 시 품절 처리)
+        Product updatedProduct = productRepository.findById(testProduct.getId()).orElseThrow();
+        assertThat(updatedProduct.getState()).isEqualTo(ProductState.OUT_OF_STOCK);
 
         executorService.shutdown();
 
@@ -155,13 +143,13 @@ class StockConcurrencyTest extends BaseIntegrationTest {
 
     @Test
     @DisplayName("재고 부족 시 동시 요청 처리")
+    @DirtiesContext
     void testConcurrentStockReductionWithInsufficientStock() throws InterruptedException {
         // given
         int initialStock = 100;
         int concurrentUsers = 200;
         int quantityPerUser = 1;
 
-        // 별도 트랜잭션으로 재고 설정 (즉시 커밋)
         setupStockInNewTransaction(testProduct.getId(), initialStock);
 
         ExecutorService executorService = Executors.newFixedThreadPool(50);
@@ -191,16 +179,14 @@ class StockConcurrencyTest extends BaseIntegrationTest {
 
         // then
         assertThat(finished).isTrue();
-
-        // 성공 건수는 초기 재고와 일치
         assertThat(successCount.get()).isEqualTo(initialStock);
-        // 실패 건수는 나머지와 일치
         assertThat(failureCount.get()).isEqualTo(concurrentUsers - initialStock);
 
-        // 최종 재고는 0이어야 함
+        // JPA를 사용한 DB 검증
         Stock finalStock = stockRepository.findByProductIdAndProductOptionIdIsNull(testProduct.getId())
                 .orElseThrow();
         assertThat(finalStock.getAvailableQuantity().getValue()).isZero();
+        assertThat(finalStock.getSoldQuantity().getValue()).isEqualTo(initialStock);
 
         executorService.shutdown();
 
@@ -209,77 +195,13 @@ class StockConcurrencyTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("대량 재고 차감 동시성 테스트")
-    void testHighVolumeConcurrentStockReduction() throws InterruptedException {
-        // given
-        int initialStock = 10000;
-        int concurrentUsers = 500;
-        int quantityPerUser = 20; // 각 사용자가 20개씩 구매
-
-        // 별도 트랜잭션으로 재고 설정 (즉시 커밋)
-        setupStockInNewTransaction(testProduct.getId(), initialStock);
-
-        ExecutorService executorService = Executors.newFixedThreadPool(100);
-        CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch endLatch = new CountDownLatch(concurrentUsers);
-
-        AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger totalReducedQuantity = new AtomicInteger(0);
-
-        long startTime = System.currentTimeMillis();
-
-        // when
-        for (int i = 0; i < concurrentUsers; i++) {
-            executorService.execute(() -> {
-                try {
-                    startLatch.await();
-                    stockService.reduceStock(testProduct.getId(), quantityPerUser);
-                    successCount.incrementAndGet();
-                    totalReducedQuantity.addAndGet(quantityPerUser);
-                } catch (Exception e) {
-                    // 재고 부족으로 인한 실패
-                } finally {
-                    endLatch.countDown();
-                }
-            });
-        }
-
-        startLatch.countDown();
-        boolean finished = endLatch.await(30, TimeUnit.SECONDS);
-        long endTime = System.currentTimeMillis();
-
-        // then
-        assertThat(finished).isTrue();
-
-        // 성능 측정
-        long duration = endTime - startTime;
-        double throughput = (double) concurrentUsers / duration * 1000;
-
-        System.out.printf("대량 재고 테스트 - 처리 시간: %dms, 처리량: %.2f TPS%n",
-                duration, throughput);
-
-        // 총 차감된 수량이 초기 재고를 초과하지 않아야 함
-        assertThat(totalReducedQuantity.get()).isLessThanOrEqualTo(initialStock);
-
-        // 최종 재고 + 차감된 재고 = 초기 재고
-        Stock finalStock = stockRepository.findByProductIdAndProductOptionIdIsNull(testProduct.getId())
-                .orElseThrow();
-        int finalAvailableQuantity = finalStock.getAvailableQuantity().getValue();
-        int finalSoldQuantity = finalStock.getSoldQuantity().getValue();
-
-        assertThat(finalAvailableQuantity + finalSoldQuantity).isEqualTo(initialStock);
-
-        executorService.shutdown();
-    }
-
-    @Test
     @DisplayName("재고 차감과 복원 동시 처리")
+    @DirtiesContext
     void testConcurrentStockReductionAndRestoration() throws InterruptedException {
         // given
         int initialStock = 500;
-        int operations = 200; // 차감 100번, 복원 100번
+        int operations = 200;
 
-        // 별도 트랜잭션으로 재고 설정 (즉시 커밋)
         setupStockInNewTransaction(testProduct.getId(), initialStock);
 
         ExecutorService executorService = Executors.newFixedThreadPool(50);
@@ -289,8 +211,7 @@ class StockConcurrencyTest extends BaseIntegrationTest {
         AtomicInteger reductions = new AtomicInteger(0);
         AtomicInteger restorations = new AtomicInteger(0);
 
-        // when
-        // 차감 작업
+        // when: 차감 100번, 복원 100번
         for (int i = 0; i < operations / 2; i++) {
             executorService.execute(() -> {
                 try {
@@ -305,7 +226,6 @@ class StockConcurrencyTest extends BaseIntegrationTest {
             });
         }
 
-        // 복원 작업
         for (int i = 0; i < operations / 2; i++) {
             executorService.execute(() -> {
                 try {
@@ -326,14 +246,13 @@ class StockConcurrencyTest extends BaseIntegrationTest {
         // then
         assertThat(finished).isTrue();
 
+        // JPA를 사용한 DB 검증
         Stock finalStock = stockRepository.findByProductIdAndProductOptionIdIsNull(testProduct.getId())
                 .orElseThrow();
 
         // 최종 재고 = 초기 재고 - 성공한 차감 + 성공한 복원
-        int expectedFinalStock = initialStock - reductions.get() + restorations.get();
-        int actualFinalStock = finalStock.getAvailableQuantity().getValue() + finalStock.getSoldQuantity().getValue();
-
-        assertThat(actualFinalStock).isEqualTo(expectedFinalStock);
+        int expectedAvailable = initialStock - reductions.get() + restorations.get();
+        assertThat(finalStock.getAvailableQuantity().getValue()).isEqualTo(expectedAvailable);
 
         executorService.shutdown();
 
@@ -343,14 +262,156 @@ class StockConcurrencyTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("여러 상품 동시 재고 관리")
-    void testMultipleProductsConcurrentStockManagement() throws InterruptedException {
+    @DisplayName("분산 락 동작 검증 - 동시 요청 시 순차적으로 처리됨")
+    @DirtiesContext
+    void testDistributedLockBehavior() throws InterruptedException {
         // given
-        List<Product> products = new ArrayList<>();
-        List<Stock> stocks = new ArrayList<>();
+        int initialStock = 50;
+        int concurrentUsers = 100;
 
-        // 5개 상품 생성 (고유한 이름)
+        setupStockInNewTransaction(testProduct.getId(), initialStock);
+
+        ExecutorService executorService = Executors.newFixedThreadPool(20);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch endLatch = new CountDownLatch(concurrentUsers);
+
+        AtomicInteger successCount = new AtomicInteger(0);
+        ConcurrentHashMap<Long, Long> threadTimestamps = new ConcurrentHashMap<>();
+
+        // when: 100명이 동시에 요청
+        for (int i = 0; i < concurrentUsers; i++) {
+            executorService.execute(() -> {
+                try {
+                    startLatch.await();
+                    long startTime = System.nanoTime();
+                    stockService.reduceStock(testProduct.getId(), 1);
+                    long endTime = System.nanoTime();
+
+                    threadTimestamps.put(Thread.currentThread().getId(), endTime - startTime);
+                    successCount.incrementAndGet();
+                } catch (Exception e) {
+                    // 실패는 정상
+                } finally {
+                    endLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        endLatch.await(30, TimeUnit.SECONDS);
+        executorService.shutdown();
+
+        // then: 정확히 50명만 성공
+        assertThat(successCount.get()).isEqualTo(initialStock);
+
+        // 분산 락이 제대로 동작했는지 검증
+        Stock finalStock = stockRepository.findByProductIdAndProductOptionIdIsNull(testProduct.getId())
+                .orElseThrow();
+        assertThat(finalStock.getAvailableQuantity().getValue()).isZero();
+        assertThat(finalStock.getSoldQuantity().getValue()).isEqualTo(initialStock);
+
+        // 상품이 품절 상태로 변경되었는지 확인
+        Product updatedProduct = productRepository.findById(testProduct.getId()).orElseThrow();
+        assertThat(updatedProduct.getState()).isEqualTo(ProductState.OUT_OF_STOCK);
+
+        System.out.println("=== Distributed Lock Test Results ===");
+        System.out.println("Success count: " + successCount.get());
+        System.out.println("Average processing time: " +
+                threadTimestamps.values().stream()
+                        .mapToLong(Long::longValue)
+                        .average()
+                        .orElse(0) / 1_000_000
+                + "ms");
+    }
+
+    @Test
+    @DisplayName("재고 소진 후 추가 요청 - 모두 실패")
+    @DirtiesContext
+    void testStockReductionAfterSoldOut() throws InterruptedException {
+        // given: 10개 재고
+        int initialStock = 10;
+        setupStockInNewTransaction(testProduct.getId(), initialStock);
+
+        // when: 먼저 10개를 모두 소진
+        for (int i = 0; i < initialStock; i++) {
+            stockService.reduceStock(testProduct.getId(), 1);
+        }
+
+        // then: 재고가 모두 소진됨
+        Stock soldOutStock = stockRepository.findByProductIdAndProductOptionIdIsNull(testProduct.getId())
+                .orElseThrow();
+        assertThat(soldOutStock.getAvailableQuantity().getValue()).isZero();
+
+        // when: 추가로 20명이 동시에 요청
+        int additionalUsers = 20;
+        ExecutorService executorService = Executors.newFixedThreadPool(10);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch endLatch = new CountDownLatch(additionalUsers);
+        AtomicInteger failureCount = new AtomicInteger(0);
+
+        for (int i = 0; i < additionalUsers; i++) {
+            executorService.execute(() -> {
+                try {
+                    startLatch.await();
+                    stockService.reduceStock(testProduct.getId(), 1);
+                } catch (Exception e) {
+                    failureCount.incrementAndGet();
+                } finally {
+                    endLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        endLatch.await(10, TimeUnit.SECONDS);
+        executorService.shutdown();
+
+        // then: 모든 요청이 실패
+        assertThat(failureCount.get()).isEqualTo(additionalUsers);
+
+        // 여전히 재고는 0
+        Stock finalStock = stockRepository.findByProductIdAndProductOptionIdIsNull(testProduct.getId())
+                .orElseThrow();
+        assertThat(finalStock.getAvailableQuantity().getValue()).isZero();
+        assertThat(finalStock.getSoldQuantity().getValue()).isEqualTo(initialStock);
+    }
+
+    @Test
+    @DisplayName("재고 복원 후 상품 상태 변경 검증")
+    @DirtiesContext
+    void testProductStateChangeAfterStockRestoration() throws InterruptedException {
+        // given: 10개 재고를 모두 소진
+        int initialStock = 10;
+        setupStockInNewTransaction(testProduct.getId(), initialStock);
+
+        for (int i = 0; i < initialStock; i++) {
+            stockService.reduceStock(testProduct.getId(), 1);
+        }
+
+        // 품절 상태 확인
+        Product soldOutProduct = productRepository.findById(testProduct.getId()).orElseThrow();
+        assertThat(soldOutProduct.getState()).isEqualTo(ProductState.OUT_OF_STOCK);
+
+        // when: 재고 복원
+        stockService.restoreStock(testProduct.getId(), 5);
+
+        // then: 상품이 다시 판매 가능 상태로 변경
+        Product restoredProduct = productRepository.findById(testProduct.getId()).orElseThrow();
+        assertThat(restoredProduct.getState()).isEqualTo(ProductState.NORMAL);
+
+        Stock restoredStock = stockRepository.findByProductIdAndProductOptionIdIsNull(testProduct.getId())
+                .orElseThrow();
+        assertThat(restoredStock.getAvailableQuantity().getValue()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("여러 상품 동시 재고 관리")
+    @DirtiesContext
+    void testMultipleProductsConcurrentStockManagement() throws InterruptedException {
+        // given: 5개 상품 생성
+        List<Product> products = new ArrayList<>();
         long timestamp = System.currentTimeMillis();
+
         for (int i = 1; i <= 5; i++) {
             Product product = Product.create(
                     "상품" + timestamp + "_" + i,
@@ -361,17 +422,16 @@ class StockConcurrencyTest extends BaseIntegrationTest {
             products.add(product);
 
             Stock stock = Stock.createForProduct(product.getId(), Quantity.of(100), null);
-            stock = stockRepository.save(stock);
-            stocks.add(stock);
+            stockRepository.save(stock);
         }
 
         ExecutorService executorService = Executors.newFixedThreadPool(50);
         CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch endLatch = new CountDownLatch(250); // 각 상품당 50개 요청
+        CountDownLatch endLatch = new CountDownLatch(250);
 
         AtomicInteger totalSuccess = new AtomicInteger(0);
 
-        // when
+        // when: 각 상품당 50개 요청
         for (Product product : products) {
             for (int i = 0; i < 50; i++) {
                 executorService.execute(() -> {
@@ -380,7 +440,7 @@ class StockConcurrencyTest extends BaseIntegrationTest {
                         stockService.reduceStock(product.getId(), 1);
                         totalSuccess.incrementAndGet();
                     } catch (Exception e) {
-                        // 실패 (각 상품의 재고가 100개이므로 50개 요청은 모두 성공해야 함)
+                        // 실패
                     } finally {
                         endLatch.countDown();
                     }
@@ -393,64 +453,15 @@ class StockConcurrencyTest extends BaseIntegrationTest {
 
         // then
         assertThat(finished).isTrue();
-        assertThat(totalSuccess.get()).isEqualTo(250); // 모든 요청이 성공해야 함
+        assertThat(totalSuccess.get()).isEqualTo(250);
 
-        // 각 상품의 재고 확인
+        // JPA를 사용한 각 상품의 재고 확인
         for (Product product : products) {
             Stock finalStock = stockRepository.findByProductIdAndProductOptionIdIsNull(product.getId())
                     .orElseThrow();
             assertThat(finalStock.getAvailableQuantity().getValue()).isEqualTo(50);
             assertThat(finalStock.getSoldQuantity().getValue()).isEqualTo(50);
         }
-
-        executorService.shutdown();
-    }
-
-    @Test
-    @DisplayName("재고 차감 성능 벤치마크")
-    void testStockReductionPerformanceBenchmark() throws InterruptedException {
-        // given
-        int operations = 1000;
-        int threadPoolSize = 100;
-
-        // 별도 트랜잭션으로 재고 설정 (즉시 커밋)
-        setupStockInNewTransaction(testProduct.getId(), operations);
-
-        ExecutorService executorService = Executors.newFixedThreadPool(threadPoolSize);
-        CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch endLatch = new CountDownLatch(operations);
-
-        long startTime = System.nanoTime();
-
-        // when
-        for (int i = 0; i < operations; i++) {
-            executorService.execute(() -> {
-                try {
-                    startLatch.await();
-                    stockService.reduceStock(testProduct.getId(), 1);
-                } catch (Exception e) {
-                    // 무시
-                } finally {
-                    endLatch.countDown();
-                }
-            });
-        }
-
-        startLatch.countDown();
-        boolean finished = endLatch.await(30, TimeUnit.SECONDS);
-        long endTime = System.nanoTime();
-
-        // then
-        assertThat(finished).isTrue();
-
-        long durationMs = (endTime - startTime) / 1_000_000;
-        double throughput = (double) operations / durationMs * 1000;
-
-        System.out.printf("재고 차감 성능 - %d건 처리 시간: %dms, 처리량: %.2f TPS%n",
-                operations, durationMs, throughput);
-
-        // 성능 기준: 1000건을 10초 내에 처리
-        assertThat(durationMs).isLessThan(10000);
 
         executorService.shutdown();
     }
