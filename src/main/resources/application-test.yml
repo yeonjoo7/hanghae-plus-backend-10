@@ -18,6 +18,11 @@ spring:
         format_sql: true
         dialect: org.hibernate.dialect.MySQLDialect
     open-in-view: false
+  
+  data:
+    redis:
+      host: localhost
+      port: 6379
 
 logging:
   level:
