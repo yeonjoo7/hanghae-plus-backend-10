@@ -146,6 +146,20 @@ public class StockService {
             throw new IllegalArgumentException("차감할 수량은 0보다 커야 합니다.");
         }
 
+        // 상품 판매 가능 여부 확인 (락 획득 전)
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId));
+
+        if (!product.isAvailable()) {
+            throw new IllegalArgumentException("판매 중지된 상품입니다. ID: " + productId);
+        }
+
+        // 구매 제한 수량 확인 (락 획득 전)
+        if (product.exceedsLimitedQuantity(Quantity.of(quantity))) {
+            throw new IllegalArgumentException("구매 제한 수량을 초과했습니다. 제한: " +
+                    product.getLimitedQuantity().getValue() + ", 요청: " + quantity);
+        }
+
         String lockKey = "stock:" + productId;
 
         lockManager.executeWithLock(lockKey, () -> {
@@ -157,20 +171,6 @@ public class StockService {
             return template.execute(status -> {
                 System.out.println(
                         "Thread " + Thread.currentThread().getId() + " acquired lock for product " + productId);
-
-                // 상품 판매 가능 여부 확인
-                Product product = productRepository.findById(productId)
-                        .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId));
-
-                if (!product.isAvailable()) {
-                    throw new IllegalArgumentException("판매 중지된 상품입니다. ID: " + productId);
-                }
-
-                // 구매 제한 수량 확인
-                if (product.exceedsLimitedQuantity(Quantity.of(quantity))) {
-                    throw new IllegalArgumentException("구매 제한 수량을 초과했습니다. 제한: " +
-                            product.getLimitedQuantity().getValue() + ", 요청: " + quantity);
-                }
 
                 // 재고 조회 및 차감
                 Stock stock = stockRepository.findByProductIdAndProductOptionIdIsNullForUpdate(productId)
@@ -196,8 +196,10 @@ public class StockService {
 
                 // 재고 소진 시 상품 품절 처리
                 if (stock.isEmpty()) {
-                    product.markOutOfStock();
-                    productRepository.save(product);
+                    Product productForUpdate = productRepository.findById(productId)
+                            .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId));
+                    productForUpdate.markOutOfStock();
+                    productRepository.save(productForUpdate);
                 }
 
                 return null;
@@ -250,6 +252,10 @@ public class StockService {
             throw new IllegalArgumentException("복구할 수량은 0보다 커야 합니다.");
         }
 
+        // 상품 존재 확인 (락 획득 전)
+        productRepository.findById(productId)
+                .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId));
+
         String lockKey = "stock:" + productId;
 
         lockManager.executeWithLock(lockKey, () -> {
@@ -259,9 +265,6 @@ public class StockService {
                     org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
             return template.execute(status -> {
-                Product product = productRepository.findById(productId)
-                        .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId));
-
                 Stock stock = stockRepository.findByProductIdAndProductOptionIdIsNullForUpdate(productId)
                         .orElseThrow(() -> new IllegalArgumentException("재고를 찾을 수 없습니다. ProductID: " + productId));
 
@@ -272,9 +275,13 @@ public class StockService {
                 stockRepository.save(stock);
 
                 // 품절 상태에서 재고가 복구되면 판매 재개
-                if (wasEmpty && !stock.isEmpty() && !product.isAvailable()) {
-                    product.markInStock();
-                    productRepository.save(product);
+                if (wasEmpty && !stock.isEmpty()) {
+                    Product product = productRepository.findById(productId)
+                            .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. ID: " + productId));
+                    if (!product.isAvailable()) {
+                        product.markInStock();
+                        productRepository.save(product);
+                    }
                 }
 
                 return null;
