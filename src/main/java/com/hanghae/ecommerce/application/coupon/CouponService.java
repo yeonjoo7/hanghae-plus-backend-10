@@ -9,6 +9,7 @@ import com.hanghae.ecommerce.domain.coupon.repository.UserCouponRepository;
 import com.hanghae.ecommerce.presentation.exception.CouponAlreadyIssuedException;
 import com.hanghae.ecommerce.presentation.exception.CouponNotFoundException;
 import com.hanghae.ecommerce.domain.user.repository.UserRepository;
+import com.hanghae.ecommerce.infrastructure.coupon.CouponQueueService;
 import com.hanghae.ecommerce.infrastructure.lock.LockManager;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -16,8 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,19 +28,22 @@ public class CouponService {
     private final UserRepository userRepository;
     private final LockManager lockManager;
     private final org.springframework.transaction.PlatformTransactionManager transactionManager;
+    private final CouponQueueService couponQueueService;
 
     public CouponService(JdbcTemplate jdbcTemplate,
             CouponRepository couponRepository,
             UserCouponRepository userCouponRepository,
             UserRepository userRepository,
             LockManager lockManager,
-            org.springframework.transaction.PlatformTransactionManager transactionManager) {
+            org.springframework.transaction.PlatformTransactionManager transactionManager,
+            CouponQueueService couponQueueService) {
         this.jdbcTemplate = jdbcTemplate;
         this.couponRepository = couponRepository;
         this.userCouponRepository = userCouponRepository;
         this.userRepository = userRepository;
         this.lockManager = lockManager;
         this.transactionManager = transactionManager;
+        this.couponQueueService = couponQueueService;
     }
 
     public UserCoupon issueCoupon(Long couponId, Long userId) {
@@ -196,5 +198,128 @@ public class CouponService {
                     return new UserCouponInfo(userCoupon, coupon);
                 })
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Redis 기반 비동기 쿠폰 발급 요청
+     * 
+     * 사용자 요청을 Redis 대기열에 추가하고 즉시 응답합니다.
+     * 실제 발급은 스케줄러가 비동기로 처리합니다.
+     * 
+     * @param couponId 쿠폰 ID
+     * @param userId   사용자 ID
+     * @return 대기열 순위 (1부터 시작, -1이면 이미 발급됨 또는 대기열에 이미 존재)
+     */
+    public long requestCouponIssue(Long couponId, Long userId) {
+        if (couponId == null || userId == null) {
+            throw new IllegalArgumentException("쿠폰 ID와 사용자 ID는 null일 수 없습니다.");
+        }
+
+        // 1. 사용자 존재 확인
+        userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다. ID: " + userId));
+
+        // 2. 쿠폰 정보 조회 및 유효성 검증
+        Coupon coupon = couponRepository.findById(couponId)
+                .orElseThrow(() -> new CouponNotFoundException(couponId));
+
+        // 쿠폰 상태 및 기간만 확인 (수량은 Redis에서 관리하므로 완화)
+        if (!coupon.getState().isIssuable()) {
+            throw new IllegalStateException("쿠폰을 발급할 수 없습니다. 상태: " + coupon.getState());
+        }
+        if (!coupon.isWithinValidPeriod()) {
+            throw new IllegalStateException("쿠폰 발급 기간이 아닙니다.");
+        }
+
+        // 3. Redis 대기열에 추가 (쿠폰 종료일 전달하여 TTL 설정)
+        long rank = couponQueueService.enqueue(couponId, userId, coupon.getEndDate());
+
+        if (rank == -1) {
+            // 이미 발급되었거나 대기열에 이미 존재
+            if (couponQueueService.isAlreadyIssued(couponId, userId)) {
+                throw new CouponAlreadyIssuedException();
+            }
+            // 대기열에 이미 존재하는 경우 기존 순위 반환
+            rank = couponQueueService.getQueueRank(couponId, userId);
+        }
+
+        // 4. 쿠폰 수량 초기화 (Redis에 없을 경우, 쿠폰 종료일 전달하여 TTL 설정)
+        int remainingQuantity = couponQueueService.getRemainingQuantity(couponId);
+        if (remainingQuantity < 0) {
+            int totalQuantity = coupon.getTotalQuantity().getValue();
+            int issuedQuantity = coupon.getIssuedQuantity().getValue();
+            remainingQuantity = totalQuantity - issuedQuantity;
+            if (remainingQuantity > 0) {
+                couponQueueService.initializeQuantity(couponId, remainingQuantity, coupon.getEndDate());
+            }
+        }
+
+        return rank;
+    }
+
+    /**
+     * 스케줄러에서 호출하는 실제 쿠폰 발급 메서드
+     * 
+     * Redis 대기열에서 처리된 사용자에 대해 실제 DB에 쿠폰을 발급합니다.
+     * 
+     * @param couponId 쿠폰 ID
+     * @param userId   사용자 ID
+     * @return 발급된 UserCoupon
+     */
+    @Transactional
+    public UserCoupon issueCouponFromQueue(Long couponId, Long userId) {
+        if (couponId == null || userId == null) {
+            throw new IllegalArgumentException("쿠폰 ID와 사용자 ID는 null일 수 없습니다.");
+        }
+
+        // 1. 중복 발급 체크
+        var existingCoupons = userCouponRepository.findByUserIdAndCouponId(userId, couponId);
+        if (!existingCoupons.isEmpty()) {
+            throw new CouponAlreadyIssuedException();
+        }
+
+        // 2. 쿠폰 정보 조회
+        Coupon coupon = couponRepository.findById(couponId)
+                .orElseThrow(() -> new CouponNotFoundException(couponId));
+
+        if (!coupon.canIssue()) {
+            throw new IllegalStateException("쿠폰을 발급할 수 없습니다. 상태: " + coupon.getState());
+        }
+
+        // 3. 쿠폰 수량 증가 (원자적 업데이트)
+        int updatedRows = jdbcTemplate.update(
+                "UPDATE coupons SET issued_quantity = issued_quantity + 1 WHERE id = ? AND issued_quantity < total_quantity",
+                couponId);
+
+        if (updatedRows == 0) {
+            throw new IllegalStateException("쿠폰이 모두 소진되었습니다.");
+        }
+
+        // 4. 사용자 쿠폰 발급
+        LocalDateTime expiresAt = LocalDateTime.now().plusDays(7);
+        UserCoupon userCoupon = UserCoupon.issue(userId, couponId, expiresAt);
+
+        return userCouponRepository.save(userCoupon);
+    }
+
+    /**
+     * 대기열 순위 조회
+     * 
+     * @param couponId 쿠폰 ID
+     * @param userId   사용자 ID
+     * @return 대기열 순위 (1부터 시작, 없으면 -1)
+     */
+    public long getQueueRank(Long couponId, Long userId) {
+        return couponQueueService.getQueueRank(couponId, userId);
+    }
+
+    /**
+     * 대기열 크기 조회
+     * 
+     * @param couponId 쿠폰 ID
+     * @return 대기열에 있는 사용자 수
+     */
+    public long getQueueSize(Long couponId) {
+        return couponQueueService.getQueueSize(couponId);
     }
 }
