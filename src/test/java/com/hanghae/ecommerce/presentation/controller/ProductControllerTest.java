@@ -61,6 +61,9 @@ class ProductControllerTest {
     private com.hanghae.ecommerce.application.product.PopularProductService popularProductService;
     
     @MockBean
+    private com.hanghae.ecommerce.application.product.ProductRankingService productRankingService;
+    
+    @MockBean
     private com.hanghae.ecommerce.infrastructure.external.DataTransmissionService dataTransmissionService;
     
     @MockBean
@@ -68,6 +71,9 @@ class ProductControllerTest {
     
     @MockBean
     private com.hanghae.ecommerce.infrastructure.scheduler.DataTransmissionScheduler dataTransmissionScheduler;
+    
+    @MockBean
+    private com.hanghae.ecommerce.infrastructure.scheduler.CouponIssuanceScheduler couponIssuanceScheduler;
 
     @Test
     @DisplayName("상품 상세 조회 성공")
