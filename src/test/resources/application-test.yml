@@ -28,6 +28,7 @@ spring:
 
   data:
     redis:
+      # Testcontainers가 동적으로 설정함 (RedisTestcontainersConfig)
       host: localhost
       port: 6379
 

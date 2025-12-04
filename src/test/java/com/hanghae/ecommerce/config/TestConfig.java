@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Profile;
  */
 @TestConfiguration
 @Profile("test")
-@org.springframework.context.annotation.Import(EmbeddedRedisConfig.class)
 public class TestConfig {
   // LockManager bean is removed to use the @Primary RedissonLockManager
+  // RedisTestcontainersConfig는 BaseIntegrationTest에 통합됨
 }
