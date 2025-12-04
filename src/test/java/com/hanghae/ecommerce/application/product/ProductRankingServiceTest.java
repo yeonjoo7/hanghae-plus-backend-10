@@ -85,8 +85,8 @@ class ProductRankingServiceTest extends BaseIntegrationTest {
         productRankingService.incrementOrderCount(product.getId(), quantity);
 
         // then
-        int orderCount = productRankingService.getOrderCount(product.getId());
-        assertThat(orderCount).isEqualTo(5);
+        Long orderCount = productRankingService.getOrderCount(product.getId());
+        assertThat(orderCount).isEqualTo(5L);
     }
 
     @Test
@@ -102,9 +102,9 @@ class ProductRankingServiceTest extends BaseIntegrationTest {
         productRankingService.incrementOrderCounts(productOrderCounts);
 
         // then
-        assertThat(productRankingService.getOrderCount(testProducts.get(0).getId())).isEqualTo(10);
-        assertThat(productRankingService.getOrderCount(testProducts.get(1).getId())).isEqualTo(20);
-        assertThat(productRankingService.getOrderCount(testProducts.get(2).getId())).isEqualTo(15);
+        assertThat(productRankingService.getOrderCount(testProducts.get(0).getId())).isEqualTo(10L);
+        assertThat(productRankingService.getOrderCount(testProducts.get(1).getId())).isEqualTo(20L);
+        assertThat(productRankingService.getOrderCount(testProducts.get(2).getId())).isEqualTo(15L);
     }
 
     @Test
@@ -119,8 +119,8 @@ class ProductRankingServiceTest extends BaseIntegrationTest {
         productRankingService.incrementOrderCount(product.getId(), 3);
 
         // then
-        int orderCount = productRankingService.getOrderCount(product.getId());
-        assertThat(orderCount).isEqualTo(18); // 5 + 10 + 3
+        Long orderCount = productRankingService.getOrderCount(product.getId());
+        assertThat(orderCount).isEqualTo(18L); // 5 + 10 + 3
     }
 
     @Test
@@ -128,9 +128,9 @@ class ProductRankingServiceTest extends BaseIntegrationTest {
     void testGetTopRankedProducts() {
         // given
         // 상품별 주문 수량 설정
-        productRankingService.incrementOrderCount(testProducts.get(0).getId(), 50); // 1위
+        productRankingService.incrementOrderCount(testProducts.get(0).getId(), 50); // 3위
         productRankingService.incrementOrderCount(testProducts.get(1).getId(), 100); // 1위
-        productRankingService.incrementOrderCount(testProducts.get(2).getId(), 30); // 3위
+        productRankingService.incrementOrderCount(testProducts.get(2).getId(), 30); // 4위
         productRankingService.incrementOrderCount(testProducts.get(3).getId(), 80); // 2위
         productRankingService.incrementOrderCount(testProducts.get(4).getId(), 10); // 5위
 
@@ -140,15 +140,15 @@ class ProductRankingServiceTest extends BaseIntegrationTest {
         // then
         assertThat(topProducts).hasSize(3);
         assertThat(topProducts.get(0).getRank()).isEqualTo(1);
-        assertThat(topProducts.get(0).getOrderCount()).isEqualTo(100); // 가장 많이 주문된 상품
+        assertThat(topProducts.get(0).getOrderCount()).isEqualTo(100L); // 가장 많이 주문된 상품
         assertThat(topProducts.get(0).getProduct().getId()).isEqualTo(testProducts.get(1).getId());
 
         assertThat(topProducts.get(1).getRank()).isEqualTo(2);
-        assertThat(topProducts.get(1).getOrderCount()).isEqualTo(80);
+        assertThat(topProducts.get(1).getOrderCount()).isEqualTo(80L);
         assertThat(topProducts.get(1).getProduct().getId()).isEqualTo(testProducts.get(3).getId());
 
         assertThat(topProducts.get(2).getRank()).isEqualTo(3);
-        assertThat(topProducts.get(2).getOrderCount()).isEqualTo(50);
+        assertThat(topProducts.get(2).getOrderCount()).isEqualTo(50L);
         assertThat(topProducts.get(2).getProduct().getId()).isEqualTo(testProducts.get(0).getId());
     }
 
@@ -166,9 +166,9 @@ class ProductRankingServiceTest extends BaseIntegrationTest {
         // then
         assertThat(topProducts).hasSize(3);
         // 주문 수량이 같으면 Redis의 정렬 순서에 따라 결정됨 (일반적으로 ID 순서)
-        assertThat(topProducts.get(0).getOrderCount()).isEqualTo(50);
-        assertThat(topProducts.get(1).getOrderCount()).isEqualTo(50);
-        assertThat(topProducts.get(2).getOrderCount()).isEqualTo(30);
+        assertThat(topProducts.get(0).getOrderCount()).isEqualTo(50L);
+        assertThat(topProducts.get(1).getOrderCount()).isEqualTo(50L);
+        assertThat(topProducts.get(2).getOrderCount()).isEqualTo(30L);
     }
 
     @Test
@@ -211,10 +211,10 @@ class ProductRankingServiceTest extends BaseIntegrationTest {
         productRankingService.incrementOrderCount(product.getId(), 25);
 
         // when
-        int orderCount = productRankingService.getOrderCount(product.getId());
+        Long orderCount = productRankingService.getOrderCount(product.getId());
 
         // then
-        assertThat(orderCount).isEqualTo(25);
+        assertThat(orderCount).isEqualTo(25L);
     }
 
     @Test
@@ -224,10 +224,10 @@ class ProductRankingServiceTest extends BaseIntegrationTest {
         Long nonExistentProductId = 99999L;
 
         // when
-        int orderCount = productRankingService.getOrderCount(nonExistentProductId);
+        Long orderCount = productRankingService.getOrderCount(nonExistentProductId);
 
         // then
-        assertThat(orderCount).isEqualTo(0);
+        assertThat(orderCount).isEqualTo(0L);
     }
 
     @Test
@@ -236,14 +236,14 @@ class ProductRankingServiceTest extends BaseIntegrationTest {
         // given
         productRankingService.incrementOrderCount(testProducts.get(0).getId(), 10);
         productRankingService.incrementOrderCount(testProducts.get(1).getId(), 20);
-        assertThat(productRankingService.getOrderCount(testProducts.get(0).getId())).isEqualTo(10);
+        assertThat(productRankingService.getOrderCount(testProducts.get(0).getId())).isEqualTo(10L);
 
         // when
         productRankingService.clearRanking();
 
         // then
-        assertThat(productRankingService.getOrderCount(testProducts.get(0).getId())).isEqualTo(0);
-        assertThat(productRankingService.getOrderCount(testProducts.get(1).getId())).isEqualTo(0);
+        assertThat(productRankingService.getOrderCount(testProducts.get(0).getId())).isEqualTo(0L);
+        assertThat(productRankingService.getOrderCount(testProducts.get(1).getId())).isEqualTo(0L);
         List<RankedProduct> topProducts = productRankingService.getTopRankedProducts(10);
         assertThat(topProducts).isEmpty();
     }
@@ -294,8 +294,8 @@ class ProductRankingServiceTest extends BaseIntegrationTest {
         productRankingService.incrementOrderCount(product.getId(), 0);
 
         // then - 예외가 발생하지 않고 무시됨
-        int orderCount = productRankingService.getOrderCount(product.getId());
-        assertThat(orderCount).isEqualTo(0);
+        Long orderCount = productRankingService.getOrderCount(product.getId());
+        assertThat(orderCount).isEqualTo(0L);
     }
 
     @Test
@@ -336,10 +336,10 @@ class ProductRankingServiceTest extends BaseIntegrationTest {
         assertThat(successCount.get()).isEqualTo(concurrentRequests);
 
         // ZINCRBY는 원자적 연산이므로 정확한 값이 나와야 함
-        int finalOrderCount = productRankingService.getOrderCount(product.getId());
+        Long finalOrderCount = productRankingService.getOrderCount(product.getId());
         assertThat(finalOrderCount)
                 .as("동시 요청 시에도 정확한 주문 수량이 유지되어야 함")
-                .isEqualTo(expectedTotal);
+                .isEqualTo((long) expectedTotal);
 
         System.out.println("=== 동시성 테스트 결과 ===");
         System.out.printf("동시 요청 수: %d%n", concurrentRequests);
@@ -389,10 +389,10 @@ class ProductRankingServiceTest extends BaseIntegrationTest {
 
         // 각 상품의 주문 수량 확인
         for (int j = 0; j < productsPerRequest && j < testProducts.size(); j++) {
-            int orderCount = productRankingService.getOrderCount(testProducts.get(j).getId());
+            Long orderCount = productRankingService.getOrderCount(testProducts.get(j).getId());
             assertThat(orderCount)
                     .as("상품 %d의 주문 수량", testProducts.get(j).getId())
-                    .isEqualTo(concurrentRequests);
+                    .isEqualTo((long) concurrentRequests);
         }
     }
 
@@ -413,7 +413,7 @@ class ProductRankingServiceTest extends BaseIntegrationTest {
         assertThat(rankedProduct.getProduct().getId()).isEqualTo(product.getId());
         assertThat(rankedProduct.getProduct().getName()).isEqualTo(product.getName());
         assertThat(rankedProduct.getStock()).isNotNull();
-        assertThat(rankedProduct.getOrderCount()).isEqualTo(100);
+        assertThat(rankedProduct.getOrderCount()).isEqualTo(100L);
         assertThat(rankedProduct.getRank()).isEqualTo(1);
     }
 }

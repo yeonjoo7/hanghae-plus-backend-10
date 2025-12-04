@@ -23,7 +23,9 @@ import com.hanghae.ecommerce.presentation.exception.PaymentAlreadyCompletedExcep
 import com.hanghae.ecommerce.application.product.StockService;
 import com.hanghae.ecommerce.application.product.ProductRankingService;
 import com.hanghae.ecommerce.application.coupon.CouponService;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -44,6 +46,8 @@ import java.util.Map;
 @Service
 public class PaymentService {
 
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
+
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final ProductRepository productRepository;
@@ -57,7 +61,7 @@ public class PaymentService {
     private final LockManager lockManager;
     private final PlatformTransactionManager transactionManager;
 
-    public PaymentService(JdbcTemplate jdbcTemplate,
+    public PaymentService(
             OrderRepository orderRepository,
             OrderItemRepository orderItemRepository,
             ProductRepository productRepository,
@@ -70,7 +74,7 @@ public class PaymentService {
             ProductRankingService productRankingService,
             LockManager lockManager,
             PlatformTransactionManager transactionManager) {
-         this.orderRepository = orderRepository;
+        this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
@@ -211,9 +215,13 @@ public class PaymentService {
                     }
                     try {
                         productRankingService.incrementOrderCounts(productOrderCounts);
-                    } catch (Exception e) {
-                        // 랭킹 업데이트 실패는 로그만 남기고 계속 진행 (주문은 이미 완료됨)
-                        System.err.println("상품 랭킹 업데이트 실패: " + e.getMessage());
+                    } catch (DataAccessException e) {
+                        // Redis 접근 실패는 로그만 남기고 계속 진행 (주문은 이미 완료됨)
+                        log.error("상품 랭킹 업데이트 실패 (Redis 접근 오류): {}", e.getMessage(), e);
+                    } catch (RuntimeException e) {
+                        // 예상치 못한 런타임 예외는 다시 던져서 개발 중에 문제를 빠르게 인지
+                        log.error("상품 랭킹 업데이트 실패 (예상치 못한 오류): {}", e.getMessage(), e);
+                        throw e;
                     }
 
                     // 12. 데이터 플랫폼 전송 (실패해도 롤백하지 않음)
@@ -249,7 +257,7 @@ public class PaymentService {
             dataTransmissionService.send(orderData);
         } catch (Exception e) {
             // 데이터 전송 실패는 무시 (Outbox에 저장됨)
-            System.err.println("데이터 전송 실패, Outbox에 저장됨: " + e.getMessage());
+            log.warn("데이터 전송 실패, Outbox에 저장됨: {}", e.getMessage(), e);
         }
     }
 
