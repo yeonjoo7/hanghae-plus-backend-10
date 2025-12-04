@@ -2,6 +2,7 @@ package com.hanghae.ecommerce.cache;
 
 import com.hanghae.ecommerce.infrastructure.cache.RedisCacheService;
 import com.hanghae.ecommerce.support.BaseIntegrationTest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,10 +38,55 @@ class RedisCacheServiceTest extends BaseIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        // Redis 연결이 준비될 때까지 대기
+        waitForRedisConnection();
+
         // 테스트 캐시 초기화
         Set<String> keys = redisTemplate.keys(TEST_CACHE_PREFIX + "*");
         if (keys != null && !keys.isEmpty()) {
             redisTemplate.delete(keys);
+        }
+    }
+
+    @AfterEach
+    void tearDown() {
+        // 테스트 캐시 정리
+        try {
+            Set<String> keys = redisTemplate.keys(TEST_CACHE_PREFIX + "*");
+            if (keys != null && !keys.isEmpty()) {
+                redisTemplate.delete(keys);
+            }
+        } catch (Exception e) {
+            // 연결이 이미 끊어진 경우 무시
+        }
+    }
+
+    /**
+     * Redis 연결이 준비될 때까지 대기
+     * 
+     * 컨테이너 재시작 등으로 인한 연결 지연을 처리합니다.
+     */
+    private void waitForRedisConnection() {
+        int maxRetries = 10;
+        int retryCount = 0;
+        
+        while (retryCount < maxRetries) {
+            try {
+                // 간단한 Redis 명령으로 연결 확인
+                redisTemplate.opsForValue().get("connection:test");
+                return; // 연결 성공
+            } catch (Exception e) {
+                retryCount++;
+                if (retryCount >= maxRetries) {
+                    throw new RuntimeException("Redis 연결 대기 실패: " + e.getMessage(), e);
+                }
+                try {
+                    Thread.sleep(100); // 100ms 대기 후 재시도
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Redis 연결 대기 중 인터럽트", ie);
+                }
+            }
         }
     }
 
