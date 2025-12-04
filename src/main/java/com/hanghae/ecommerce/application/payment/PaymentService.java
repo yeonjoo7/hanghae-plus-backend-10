@@ -1,7 +1,6 @@
 package com.hanghae.ecommerce.application.payment;
 
 import com.hanghae.ecommerce.presentation.dto.PaymentResultDto;
-import com.hanghae.ecommerce.presentation.dto.UserCouponDto;
 import com.hanghae.ecommerce.domain.order.Order;
 import com.hanghae.ecommerce.domain.order.OrderState;
 import com.hanghae.ecommerce.domain.order.repository.OrderItemRepository;
@@ -9,11 +8,8 @@ import com.hanghae.ecommerce.domain.order.repository.OrderRepository;
 import com.hanghae.ecommerce.domain.payment.BalanceTransaction;
 import com.hanghae.ecommerce.domain.payment.Payment;
 import com.hanghae.ecommerce.domain.payment.PaymentMethod;
-import com.hanghae.ecommerce.domain.payment.PaymentState;
-import com.hanghae.ecommerce.domain.payment.TransactionType;
 import com.hanghae.ecommerce.domain.payment.repository.BalanceTransactionRepository;
 import com.hanghae.ecommerce.domain.payment.repository.PaymentRepository;
-import com.hanghae.ecommerce.domain.product.Quantity;
 import com.hanghae.ecommerce.domain.product.repository.ProductRepository;
 import com.hanghae.ecommerce.domain.user.Point;
 import com.hanghae.ecommerce.domain.user.User;
@@ -25,6 +21,7 @@ import com.hanghae.ecommerce.presentation.exception.InsufficientStockException;
 import com.hanghae.ecommerce.presentation.exception.OrderNotFoundException;
 import com.hanghae.ecommerce.presentation.exception.PaymentAlreadyCompletedException;
 import com.hanghae.ecommerce.application.product.StockService;
+import com.hanghae.ecommerce.application.product.ProductRankingService;
 import com.hanghae.ecommerce.application.coupon.CouponService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -36,7 +33,6 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * 결제 처리 서비스
@@ -48,7 +44,6 @@ import java.util.UUID;
 @Service
 public class PaymentService {
 
-    private final JdbcTemplate jdbcTemplate;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final ProductRepository productRepository;
@@ -58,6 +53,7 @@ public class PaymentService {
     private final DataTransmissionService dataTransmissionService;
     private final StockService stockService;
     private final CouponService couponService;
+    private final ProductRankingService productRankingService;
     private final LockManager lockManager;
     private final PlatformTransactionManager transactionManager;
 
@@ -71,10 +67,10 @@ public class PaymentService {
             DataTransmissionService dataTransmissionService,
             StockService stockService,
             CouponService couponService,
+            ProductRankingService productRankingService,
             LockManager lockManager,
             PlatformTransactionManager transactionManager) {
-        this.jdbcTemplate = jdbcTemplate;
-        this.orderRepository = orderRepository;
+         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
@@ -83,6 +79,7 @@ public class PaymentService {
         this.dataTransmissionService = dataTransmissionService;
         this.stockService = stockService;
         this.couponService = couponService;
+        this.productRankingService = productRankingService;
         this.lockManager = lockManager;
         this.transactionManager = transactionManager;
     }
@@ -193,8 +190,6 @@ public class PaymentService {
                     paymentRepository.save(payment);
 
                     // 9. 잔액 거래 내역 저장
-                    Point afterBalance = user.getAvailablePoint();
-
                     BalanceTransaction transaction = BalanceTransaction.createPayment(
                             Long.valueOf(userId),
                             Long.valueOf(orderId),
@@ -207,7 +202,21 @@ public class PaymentService {
                     lockedOrder.complete();
                     orderRepository.save(lockedOrder);
 
-                    // 11. 데이터 플랫폼 전송 (실패해도 롤백하지 않음)
+                    // 11. 상품 랭킹 업데이트 (Redis Sorted Set)
+                    Map<Long, Integer> productOrderCounts = new HashMap<>();
+                    for (var item : orderItems) {
+                        productOrderCounts.put(
+                                item.getProductId(),
+                                item.getQuantity().getValue());
+                    }
+                    try {
+                        productRankingService.incrementOrderCounts(productOrderCounts);
+                    } catch (Exception e) {
+                        // 랭킹 업데이트 실패는 로그만 남기고 계속 진행 (주문은 이미 완료됨)
+                        System.err.println("상품 랭킹 업데이트 실패: " + e.getMessage());
+                    }
+
+                    // 12. 데이터 플랫폼 전송 (실패해도 롤백하지 않음)
                     sendOrderDataAsync(orderId, userId, lockedOrder, orderItems, paymentMethod);
 
                     return payment;
