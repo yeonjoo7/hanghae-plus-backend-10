@@ -124,11 +124,13 @@ public class ProductRankingService {
         .collect(Collectors.toMap(Stock::getProductId, Function.identity()));
 
     // 랭킹 정보와 함께 RankedProduct 객체 생성 (Stream API 사용)
-    int[] rankCounter = { 1 };
+    // AtomicInteger를 사용하여 랭크 계산을 명확하게 처리
+    java.util.concurrent.atomic.AtomicInteger rankCounter = new java.util.concurrent.atomic.AtomicInteger(1);
     return rankedProducts.stream()
         .filter(tuple -> tuple != null && tuple.getValue() != null)
         .map(tuple -> {
           Object value = tuple.getValue();
+          // filter에서 이미 null 체크를 했으므로 value는 null이 아님
           if (value == null) {
             return null;
           }
@@ -140,8 +142,9 @@ public class ProductRankingService {
           Product product = productMap.get(productId);
           Stock stock = stockMap.get(productId);
 
+          // product와 stock이 모두 존재하는 경우에만 RankedProduct 생성
           if (product != null && stock != null) {
-            return new RankedProduct(rankCounter[0]++, product, stock, orderCount);
+            return new RankedProduct(rankCounter.getAndIncrement(), product, stock, orderCount);
           }
           return null;
         })

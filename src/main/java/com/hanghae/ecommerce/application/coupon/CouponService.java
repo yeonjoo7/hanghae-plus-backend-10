@@ -234,22 +234,20 @@ public class CouponService {
         // 3. Redis 대기열에 추가 (쿠폰 종료일 전달하여 TTL 설정)
         long rank = couponQueueService.enqueue(couponId, userId, coupon.getEndDate());
 
+        // enqueue()는 이미 발급된 경우에만 -1을 반환하므로, -1이면 이미 발급된 경우
         if (rank == -1) {
-            // 이미 발급되었거나 대기열에 이미 존재
-            if (couponQueueService.isAlreadyIssued(couponId, userId)) {
-                throw new CouponAlreadyIssuedException();
-            }
-            // 대기열에 이미 존재하는 경우 기존 순위 반환
-            rank = couponQueueService.getQueueRank(couponId, userId);
+            throw new CouponAlreadyIssuedException();
         }
 
         // 4. 쿠폰 수량 초기화 (Redis에 없을 경우, 쿠폰 종료일 전달하여 TTL 설정)
-        int remainingQuantity = couponQueueService.getRemainingQuantity(couponId);
-        if (remainingQuantity < 0) {
+        // SETNX를 사용하여 원자적으로 초기화하여 동시성 이슈 방지
+        java.util.Optional<Integer> remainingQuantityOpt = couponQueueService.getRemainingQuantity(couponId);
+        if (remainingQuantityOpt.isEmpty()) {
             int totalQuantity = coupon.getTotalQuantity().getValue();
             int issuedQuantity = coupon.getIssuedQuantity().getValue();
-            remainingQuantity = totalQuantity - issuedQuantity;
+            int remainingQuantity = totalQuantity - issuedQuantity;
             if (remainingQuantity > 0) {
+                // SETNX를 사용하여 원자적으로 초기화 (이미 다른 스레드가 초기화했으면 false 반환)
                 couponQueueService.initializeQuantity(couponId, remainingQuantity, coupon.getEndDate());
             }
         }
