@@ -38,4 +38,6 @@ logging:
     com.hanghae: DEBUG
     org.hibernate.SQL: DEBUG
     org.testcontainers: INFO
+    # Lettuce 재연결 로그 레벨 조정 (테스트 환경에서 불필요한 로그 방지)
+    io.lettuce.core.protocol.ConnectionWatchdog: WARN
 

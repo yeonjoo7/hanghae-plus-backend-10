@@ -6,6 +6,8 @@ import com.hanghae.ecommerce.domain.coupon.repository.CouponRepository;
 import com.hanghae.ecommerce.infrastructure.coupon.CouponQueueService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -26,8 +28,13 @@ import java.util.Set;
  * ## 스케줄 설정
  * - fixedDelay: 1초마다 실행 (대기열 처리)
  * - 초당 처리량: 배치 크기만큼 (기본 100명)
+ * 
+ * ## 테스트 환경
+ * - 테스트 프로파일에서는 자동으로 비활성화됨
  */
 @Component
+@Profile("!test")
+@ConditionalOnProperty(name = "app.scheduler.coupon-issuance.enabled", havingValue = "true", matchIfMissing = false)
 public class CouponIssuanceScheduler {
 
   private static final Logger log = LoggerFactory.getLogger(CouponIssuanceScheduler.class);

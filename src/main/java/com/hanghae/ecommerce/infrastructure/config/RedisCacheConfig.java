@@ -75,30 +75,35 @@ public class RedisCacheConfig {
             config.setPassword(password);
         }
 
+        // 테스트 환경 여부 확인
+        boolean isTestProfile = environment.matchesProfiles("test");
+        
         // Lettuce Client 설정: timeout 및 재연결 정책
+        // 테스트 환경에서는 timeout을 짧게 설정하여 빠르게 실패하도록 함
+        Duration connectTimeout = isTestProfile ? Duration.ofSeconds(5) : Duration.ofSeconds(30);
+        Duration commandTimeout = isTestProfile ? Duration.ofSeconds(3) : Duration.ofSeconds(15);
+        Duration shutdownTimeout = isTestProfile ? Duration.ofSeconds(2) : Duration.ofSeconds(5);
+        
         SocketOptions socketOptions = SocketOptions.builder()
-                .connectTimeout(Duration.ofSeconds(30))  // 연결 timeout: 30초
+                .connectTimeout(connectTimeout)  // 테스트: 5초, 운영: 30초
                 .build();
 
         TimeoutOptions timeoutOptions = TimeoutOptions.builder()
-                .fixedTimeout(Duration.ofSeconds(15))  // 명령 실행 timeout: 15초
+                .fixedTimeout(commandTimeout)  // 테스트: 3초, 운영: 15초
                 .build();
 
-        // 자동 재연결 활성화 (테스트 환경에서도 재연결 필요)
+        // 테스트 환경에서는 자동 재연결 비활성화 (연결 실패 시 빠르게 실패하고 예외 처리로 폴백)
+        // 운영 환경에서는 자동 재연결 활성화 (장애 복구를 위해 필요)
         ClientOptions clientOptions = ClientOptions.builder()
                 .socketOptions(socketOptions)
                 .timeoutOptions(timeoutOptions)
-                .autoReconnect(true)  // 자동 재연결 활성화
+                .autoReconnect(!isTestProfile)  // 테스트: false, 운영: true
                 .build();
-
-        // 테스트 환경에서는 shutdownTimeout을 짧게 설정 (1초는 너무 짧아서 2초로 조정)
-        boolean isTestProfile = environment.matchesProfiles("test");
-        Duration shutdownTimeout = isTestProfile ? Duration.ofSeconds(2) : Duration.ofSeconds(5);
         
         LettuceClientConfiguration clientConfig = LettuceClientConfiguration.builder()
                 .clientOptions(clientOptions)
-                .commandTimeout(Duration.ofSeconds(15))  // 명령 timeout: 15초
-                .shutdownTimeout(shutdownTimeout)  // 테스트 환경에서는 1초, 운영 환경에서는 5초
+                .commandTimeout(commandTimeout)  // 테스트: 3초, 운영: 15초
+                .shutdownTimeout(shutdownTimeout)  // 테스트: 2초, 운영: 5초
                 .build();
 
         LettuceConnectionFactory factory = new LettuceConnectionFactory(config, clientConfig);
