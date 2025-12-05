@@ -3,18 +3,20 @@ package com.hanghae.ecommerce.presentation.controller.product;
 import com.hanghae.ecommerce.application.product.ProductService;
 import com.hanghae.ecommerce.application.product.ProductService.PopularProduct;
 import com.hanghae.ecommerce.application.product.ProductService.ProductWithStock;
+import com.hanghae.ecommerce.application.product.ProductRankingService;
+import com.hanghae.ecommerce.application.product.ProductRankingService.RankedProduct;
 import com.hanghae.ecommerce.common.ApiResponse;
 import com.hanghae.ecommerce.domain.product.Product;
 import com.hanghae.ecommerce.domain.product.ProductState;
 import com.hanghae.ecommerce.presentation.dto.PopularProductResponse;
 import com.hanghae.ecommerce.presentation.dto.ProductDetailResponse;
 import com.hanghae.ecommerce.presentation.dto.ProductListResponse;
+import com.hanghae.ecommerce.presentation.dto.ProductRankingResponse;
 import com.hanghae.ecommerce.presentation.dto.ProductSummaryResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.Pattern;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
@@ -30,6 +32,7 @@ import java.util.stream.Collectors;
 public class ProductController {
 
     private final ProductService productService;
+    private final ProductRankingService productRankingService;
 
     /**
      * 상품 상세 조회
@@ -125,6 +128,42 @@ public class ProductController {
                 .collect(Collectors.toList());
 
         PopularProductResponse response = new PopularProductResponse(products, LocalDateTime.now());
+        return ApiResponse.success(response);
+    }
+
+    /**
+     * 상품 주문 랭킹 조회 (Redis Sorted Set 기반)
+     * GET /products/ranking?limit={limit}
+     * 
+     * @param limit 조회할 상품 개수 (기본값: 10)
+     * @return 주문 수량 기준 상위 랭킹 상품 목록
+     */
+    @GetMapping("/ranking")
+    public ApiResponse<ProductRankingResponse> getProductRanking(
+            @RequestParam(value = "limit", defaultValue = "10") int limit) {
+        if (limit <= 0 || limit > 100) {
+            throw new IllegalArgumentException("조회 개수는 1 이상 100 이하여야 합니다.");
+        }
+
+        List<RankedProduct> rankedProducts = productRankingService.getTopRankedProducts(limit);
+
+        List<ProductRankingResponse.RankedProductItem> products = rankedProducts.stream()
+                .map(rankedProduct -> {
+                    Integer availableQuantity = rankedProduct.getStock() != null
+                            ? rankedProduct.getStock().getAvailableQuantity().getValue()
+                            : null;
+
+                    return new ProductRankingResponse.RankedProductItem(
+                            rankedProduct.getRank(),
+                            rankedProduct.getProduct().getId(),
+                            rankedProduct.getProduct().getName(),
+                            rankedProduct.getProduct().getPrice().getValue(),
+                            availableQuantity,
+                            rankedProduct.getOrderCount());
+                })
+                .collect(Collectors.toList());
+
+        ProductRankingResponse response = new ProductRankingResponse(products, LocalDateTime.now());
         return ApiResponse.success(response);
     }
 

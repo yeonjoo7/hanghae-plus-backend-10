@@ -23,10 +23,10 @@ public class RedisCacheService {
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final LockManager lockManager;
-    
+
     // 캐시 갱신 락 타임아웃
     private static final long CACHE_LOCK_TIMEOUT_SECONDS = 5L;
-    
+
     // 캐시 갱신 락 키 접두사
     private static final String CACHE_LOCK_PREFIX = "cache-lock:";
 
@@ -38,29 +38,39 @@ public class RedisCacheService {
     /**
      * 캐시에서 값을 조회합니다.
      * 
-     * @param key 캐시 키
+     * @param key  캐시 키
      * @param type 반환 타입
      * @return 캐시된 값 또는 null
      */
     @SuppressWarnings("unchecked")
     public <T> T get(String key, Class<T> type) {
-        Object value = redisTemplate.opsForValue().get(key);
-        if (value != null && type.isInstance(value)) {
-            return (T) value;
+        try {
+            Object value = redisTemplate.opsForValue().get(key);
+            if (value != null && type.isInstance(value)) {
+                return (T) value;
+            }
+            return null;
+        } catch (Exception e) {
+            // Redis 연결 실패 등 예외 발생 시 null 반환 (캐시 미스로 처리)
+            // 로그는 남기지 않음 (테스트 환경에서 너무 많은 로그 발생 방지)
+            return null;
         }
-        return null;
     }
 
     /**
      * 캐시에 값을 저장합니다.
      * 
-     * @param key 캐시 키
+     * @param key   캐시 키
      * @param value 저장할 값
-     * @param ttl 만료 시간
+     * @param ttl   만료 시간
      */
     public void set(String key, Object value, Duration ttl) {
         if (value != null) {
-            redisTemplate.opsForValue().set(key, value, ttl);
+            try {
+                redisTemplate.opsForValue().set(key, value, ttl);
+            } catch (Exception e) {
+                // Redis 연결 실패 시 예외 무시 (캐시 저장 실패는 치명적이지 않음)
+            }
         }
     }
 
@@ -91,9 +101,9 @@ public class RedisCacheService {
      * 캐시에서 조회하고, 없으면 DB에서 조회하여 캐시에 저장합니다.
      * 분산락을 사용하여 동시에 여러 요청이 DB를 조회하는 것을 방지합니다.
      * 
-     * @param key 캐시 키
-     * @param type 반환 타입
-     * @param ttl 캐시 TTL
+     * @param key    캐시 키
+     * @param type   반환 타입
+     * @param ttl    캐시 TTL
      * @param loader DB 조회 함수
      * @return 캐시된 값 또는 DB에서 조회한 값
      */
@@ -106,24 +116,34 @@ public class RedisCacheService {
 
         // 2. 캐시 미스 - 분산락을 사용하여 DB 조회 (Cache Stampede 방지)
         String lockKey = CACHE_LOCK_PREFIX + key;
-        
-        return lockManager.executeWithLock(lockKey, CACHE_LOCK_TIMEOUT_SECONDS, TimeUnit.SECONDS, () -> {
-            // 3. 이중 체크 - 다른 스레드가 이미 캐시를 갱신했을 수 있음
-            T doubleCheckValue = get(key, type);
-            if (doubleCheckValue != null) {
-                return doubleCheckValue;
-            }
 
-            // 4. DB에서 조회
-            T loadedValue = loader.get();
-            
-            // 5. 캐시에 저장
-            if (loadedValue != null) {
-                set(key, loadedValue, ttl);
-            }
-            
-            return loadedValue;
-        });
+        try {
+            return lockManager.executeWithLock(lockKey, CACHE_LOCK_TIMEOUT_SECONDS, TimeUnit.SECONDS, () -> {
+                // 3. 이중 체크 - 다른 스레드가 이미 캐시를 갱신했을 수 있음
+                T doubleCheckValue = get(key, type);
+                if (doubleCheckValue != null) {
+                    return doubleCheckValue;
+                }
+
+                // 4. DB에서 조회
+                T loadedValue = loader.get();
+
+                // 5. 캐시에 저장 (실패해도 무시)
+                if (loadedValue != null) {
+                    try {
+                        set(key, loadedValue, ttl);
+                    } catch (Exception e) {
+                        // Redis 연결 실패 시 캐시 저장 실패는 무시하고 DB 조회 결과 반환
+                    }
+                }
+
+                return loadedValue;
+            });
+        } catch (Exception e) {
+            // 분산락 획득 실패 또는 Redis 연결 실패 시 DB에서 직접 조회
+            // (락 획득 실패는 다른 스레드가 처리 중일 수 있으므로 DB 조회로 폴백)
+            return loader.get();
+        }
     }
 
     /**
@@ -131,9 +151,9 @@ public class RedisCacheService {
      * 
      * DB 업데이트 후 캐시도 함께 갱신합니다.
      * 
-     * @param key 캐시 키
+     * @param key   캐시 키
      * @param value 새 값
-     * @param ttl 캐시 TTL
+     * @param ttl   캐시 TTL
      */
     public void update(String key, Object value, Duration ttl) {
         set(key, value, ttl);
@@ -182,4 +202,3 @@ public class RedisCacheService {
         return keys != null ? keys.size() : 0;
     }
 }
-

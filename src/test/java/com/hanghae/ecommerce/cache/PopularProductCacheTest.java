@@ -11,6 +11,7 @@ import com.hanghae.ecommerce.domain.product.repository.StockRepository;
 import com.hanghae.ecommerce.infrastructure.cache.PopularProductCache;
 import com.hanghae.ecommerce.infrastructure.cache.RedisCacheService;
 import com.hanghae.ecommerce.support.BaseIntegrationTest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -59,6 +60,9 @@ class PopularProductCacheTest extends BaseIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        // Redis 연결이 준비될 때까지 대기
+        waitForRedisConnection();
+
         // Redis 캐시 초기화
         clearRedisCache();
 
@@ -69,10 +73,59 @@ class PopularProductCacheTest extends BaseIntegrationTest {
         recordSalesData();
     }
 
+    @AfterEach
+    void tearDown() {
+        // Redis 캐시 정리
+        try {
+            clearRedisCache();
+        } catch (Exception e) {
+            // 연결이 이미 끊어진 경우 무시
+        }
+    }
+
+    /**
+     * Redis 연결이 준비될 때까지 대기
+     * 
+     * 컨테이너 재시작 등으로 인한 연결 지연을 처리합니다.
+     */
+    private void waitForRedisConnection() {
+        int maxRetries = 10;
+        int retryCount = 0;
+        
+        while (retryCount < maxRetries) {
+            try {
+                // 간단한 Redis 명령으로 연결 확인
+                redisTemplate.opsForValue().get("connection:test");
+                return; // 연결 성공
+            } catch (Exception e) {
+                retryCount++;
+                if (retryCount >= maxRetries) {
+                    throw new RuntimeException("Redis 연결 대기 실패: " + e.getMessage(), e);
+                }
+                try {
+                    Thread.sleep(100); // 100ms 대기 후 재시도
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Redis 연결 대기 중 인터럽트", ie);
+                }
+            }
+        }
+    }
+
+    /**
+     * Redis 캐시 초기화
+     * 
+     * 연결이 끊어진 경우 예외를 무시하여 안전하게 처리합니다.
+     */
     private void clearRedisCache() {
-        Set<String> keys = redisTemplate.keys("popular-products:*");
-        if (keys != null && !keys.isEmpty()) {
-            redisTemplate.delete(keys);
+        try {
+            Set<String> keys = redisTemplate.keys("popular-products:*");
+            if (keys != null && !keys.isEmpty()) {
+                redisTemplate.delete(keys);
+            }
+        } catch (Exception e) {
+            // 연결이 이미 끊어진 경우 무시
+            // 테스트 종료 시점에 발생할 수 있는 정상적인 상황
         }
     }
 
@@ -146,6 +199,8 @@ class PopularProductCacheTest extends BaseIntegrationTest {
     @DisplayName("Cache Stampede 방지 - 동시 요청 시 DB 조회가 1번만 발생")
     void testCacheStampedePrevention() throws InterruptedException {
         // given: 캐시가 비어있는 상태
+        // 연결 확인 후 캐시 초기화
+        waitForRedisConnection();
         clearRedisCache();
 
         int concurrentRequests = 50;
@@ -255,6 +310,8 @@ class PopularProductCacheTest extends BaseIntegrationTest {
     @DisplayName("대량 동시 요청 시 성능 및 정합성 테스트")
     void testHighConcurrencyPerformance() throws InterruptedException {
         // given
+        // 연결 확인 후 캐시 초기화
+        waitForRedisConnection();
         clearRedisCache();
 
         int concurrentRequests = 100;

@@ -2,6 +2,7 @@ package com.hanghae.ecommerce.infrastructure.scheduler;
 
 import com.hanghae.ecommerce.application.product.PopularProductService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -14,7 +15,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @EnableScheduling
-@ConditionalOnProperty(name = "app.scheduler.enabled", havingValue = "true", matchIfMissing = true)
+@Profile("!test")
+@ConditionalOnProperty(name = "app.scheduler.enabled", havingValue = "true", matchIfMissing = false)
 public class PopularProductScheduler {
 
     private final PopularProductService popularProductService;
