@@ -210,6 +210,6 @@ public class PaymentService {
     }
 
     public List<Payment> getPaymentsByOrderId(String orderId) {
-        return List.of();
+        return paymentRepository.findByOrderId(Long.valueOf(orderId));
     }
 }
