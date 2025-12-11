@@ -120,7 +120,6 @@ class ProductControllerTest {
     @DisplayName("인기 상품 목록 조회 성공")
     void getPopularProducts_Success() throws Exception {
         // given
-
         List<ProductService.PopularProduct> popularProducts = List.of(
                 new ProductService.PopularProduct(
                         1, Product.create("인기상품1", "설명1", Money.of(10000), Quantity.of(5)),
@@ -129,7 +128,8 @@ class ProductControllerTest {
                         2, Product.create("인기상품2", "설명2", Money.of(20000), Quantity.of(3)),
                         null, 80, java.time.LocalDate.now().minusDays(7), java.time.LocalDate.now()));
 
-        when(productService.getPopularProducts()).thenReturn(popularProducts);
+        // weekly(기본값) → 7일, limit 10
+        when(productService.getPopularProducts(7, 10)).thenReturn(popularProducts);
 
         // when & then
         mockMvc.perform(get("/products/popular")
@@ -139,7 +139,7 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.data.products").isArray())
                 .andExpect(jsonPath("$.data.products.length()").value(2));
 
-        verify(productService).getPopularProducts();
+        verify(productService).getPopularProducts(7, 10);
     }
 
 }
