@@ -2,7 +2,6 @@ package com.hanghae.ecommerce.infrastructure.coupon;
 
 import com.hanghae.ecommerce.application.coupon.CouponService;
 import com.hanghae.ecommerce.domain.coupon.Coupon;
-import com.hanghae.ecommerce.domain.coupon.CouponState;
 import com.hanghae.ecommerce.domain.coupon.DiscountPolicy;
 import com.hanghae.ecommerce.domain.coupon.repository.CouponRepository;
 import com.hanghae.ecommerce.domain.coupon.repository.UserCouponRepository;
@@ -18,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -87,6 +87,45 @@ class CouponIssuanceIntegrationTest extends BaseIntegrationTest {
         return users;
     }
 
+    /**
+     * 테스트 환경에서 스케줄러 대신 직접 대기열 처리
+     *
+     * 실제 운영 환경에서는 CouponIssuanceScheduler가 이 작업을 수행합니다.
+     */
+    private void processCouponQueueManually(Long couponId, int maxIssuance) {
+        int issuedCount = 0;
+
+        while (issuedCount < maxIssuance) {
+            Set<Object> topUsers = couponQueueService.getTopUsers(couponId, 10);
+            if (topUsers == null || topUsers.isEmpty()) {
+                break;
+            }
+
+            for (Object userIdObj : topUsers) {
+                if (issuedCount >= maxIssuance) {
+                    break;
+                }
+
+                try {
+                    Long userId = Long.valueOf(userIdObj.toString());
+
+                    if (couponQueueService.isAlreadyIssued(couponId, userId)) {
+                        couponQueueService.removeFromQueue(couponId, userId);
+                        continue;
+                    }
+
+                    // 실제 쿠폰 발급
+                    couponService.issueCouponFromQueue(couponId, userId);
+                    couponQueueService.markAsIssued(couponId, userId);
+                    issuedCount++;
+                } catch (Exception e) {
+                    // 발급 실패 시 대기열에서 제거
+                    couponQueueService.removeFromQueue(couponId, Long.valueOf(userIdObj.toString()));
+                }
+            }
+        }
+    }
+
     @Test
     @DisplayName("선착순 쿠폰 발급 - 100개 쿠폰에 200명 동시 요청 시 정확히 100명만 발급")
     void testFirstComeFirstServedCouponIssuance() throws InterruptedException {
@@ -126,8 +165,8 @@ class CouponIssuanceIntegrationTest extends BaseIntegrationTest {
         // then - 모든 요청이 대기열에 추가되었는지 확인
         assertThat(requestCount.get()).isEqualTo(totalUsers);
 
-        // 스케줄러가 처리할 시간을 기다림 (최대 10초)
-        Thread.sleep(10000);
+        // 테스트 환경에서는 스케줄러가 비활성화되어 있으므로 직접 대기열 처리
+        processCouponQueueManually(couponId, totalCoupons);
 
         // 실제 발급된 쿠폰 수 확인
         int issuedCount = userCouponRepository.findByCouponId(couponId).size();
@@ -190,7 +229,7 @@ class CouponIssuanceIntegrationTest extends BaseIntegrationTest {
 
     @Test
     @DisplayName("쿠폰 소진 후 추가 요청 처리")
-    void testSoldOutCoupon() throws InterruptedException {
+    void testSoldOutCoupon() {
         // given
         Long couponId = testCoupon.getId();
         int totalCoupons = 100;
@@ -210,8 +249,9 @@ class CouponIssuanceIntegrationTest extends BaseIntegrationTest {
         assertThat(rank).isEqualTo(totalCoupons + 1);
         assertThat(couponQueueService.getQueueSize(couponId)).isEqualTo(totalCoupons + 1);
 
-        // 스케줄러가 처리할 시간 대기
-        Thread.sleep(5000);
+        // 테스트 환경에서는 스케줄러가 비활성화되어 있으므로 직접 대기열 처리
+        // 101명이 대기열에 있지만, 쿠폰은 100개만 있으므로 100개만 발급되어야 함
+        processCouponQueueManually(couponId, totalCoupons + 10); // 충분히 큰 수로 호출
 
         // 실제 발급은 100개만 되어야 함
         int issuedCount = userCouponRepository.findByCouponId(couponId).size();

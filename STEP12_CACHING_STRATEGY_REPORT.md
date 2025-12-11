@@ -271,14 +271,47 @@ public class RedisCacheConfig {
 
 ## 8. 테스트 검증
 
-### 8.1 테스트 구성
+### 8.1 테스트 환경 구성
+
+통합 테스트는 **Testcontainers**를 사용하여 실제 Redis 환경에서 실행됩니다.
+
+```java
+public abstract class BaseIntegrationTest {
+
+  /**
+   * Singleton Redis 컨테이너
+   * 모든 테스트 클래스에서 동일한 컨테이너를 공유합니다.
+   */
+  private static final GenericContainer<?> REDIS_CONTAINER;
+
+  static {
+    REDIS_CONTAINER = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
+        .withExposedPorts(6379)
+        .waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofSeconds(30)));
+    REDIS_CONTAINER.start();
+  }
+
+  @DynamicPropertySource
+  static void configureProperties(DynamicPropertyRegistry registry) {
+    registry.add("spring.data.redis.host", REDIS_CONTAINER::getHost);
+    registry.add("spring.data.redis.port", REDIS_CONTAINER::getFirstMappedPort);
+  }
+}
+```
+
+**Singleton 패턴 사용 이유:**
+- Spring 컨텍스트 캐싱과 호환
+- 테스트 클래스 간 동일한 Redis 컨테이너 공유로 테스트 속도 향상
+- `@Container` 어노테이션 사용 시 발생하는 포트 불일치 문제 해결
+
+### 8.2 테스트 파일 구성
 
 | 테스트 파일 | 테스트 목적 |
 |------------|-----------|
 | `PopularProductCacheTest.java` | 인기 상품 캐싱 통합 테스트 |
 | `RedisCacheServiceTest.java` | RedisCacheService 단위 테스트 (Cache Stampede 집중) |
 
-### 8.2 인기 상품 캐싱 테스트 (`PopularProductCacheTest.java`)
+### 8.3 인기 상품 캐싱 테스트 (`PopularProductCacheTest.java`)
 
 | 테스트 | 검증 내용 |
 |--------|----------|
@@ -289,7 +322,7 @@ public class RedisCacheConfig {
 | `testHighConcurrencyPerformance` | 100개 동시 요청 성능 및 정합성 |
 | `testCacheTtl` | 캐시 TTL이 5분으로 설정되었는지 확인 |
 
-### 8.3 Cache Stampede 방지 테스트 (`RedisCacheServiceTest.java`)
+### 8.4 Cache Stampede 방지 테스트 (`RedisCacheServiceTest.java`)
 
 | 테스트 | 검증 내용 |
 |--------|----------|
@@ -299,7 +332,7 @@ public class RedisCacheConfig {
 | `testCacheStampedePrevention` | **50개 동시 요청 시 로더가 정확히 1번만 호출되는지 검증** |
 | `testDoubleCheckLocking` | **100개 동시 요청에서 Double-Check 동작 확인** |
 
-### 8.4 핵심 테스트 코드: Cache Stampede 방지 검증
+### 8.5 핵심 테스트 코드: Cache Stampede 방지 검증
 
 ```java
 @Test
@@ -336,7 +369,7 @@ void testCacheStampedePrevention() throws InterruptedException {
 }
 ```
 
-### 8.5 테스트 실행 예시 출력
+### 8.6 테스트 실행 예시 출력
 
 ```
 === Cache Stampede 방지 테스트 결과 ===
@@ -394,4 +427,8 @@ void testCacheStampedePrevention() throws InterruptedException {
 2. **Probabilistic Early Expiration** 적용 검토
 3. **Local Cache + Redis 2-tier 캐시** 구조 검토
 4. **캐시 프리워밍 스케줄러** 고도화
+
+
+
+
 
