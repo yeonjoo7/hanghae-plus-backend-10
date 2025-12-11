@@ -9,10 +9,15 @@ import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
+import io.lettuce.core.ClientOptions;
+import io.lettuce.core.SocketOptions;
+import io.lettuce.core.TimeoutOptions;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
+import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
@@ -44,6 +49,12 @@ public class RedisCacheConfig {
     @Value("${spring.data.redis.password:}")
     private String password;
 
+    private final Environment environment;
+    
+    public RedisCacheConfig(Environment environment) {
+        this.environment = environment;
+    }
+
     // 캐시 이름 상수
     public static final String POPULAR_PRODUCTS_CACHE = "popularProducts";
     public static final String PRODUCT_CACHE = "product";
@@ -63,7 +74,41 @@ public class RedisCacheConfig {
         if (password != null && !password.isEmpty()) {
             config.setPassword(password);
         }
-        return new LettuceConnectionFactory(config);
+
+        // 테스트 환경 여부 확인
+        boolean isTestProfile = environment.matchesProfiles("test");
+        
+        // Lettuce Client 설정: timeout 및 재연결 정책
+        // 테스트 환경에서는 timeout을 짧게 설정하여 빠르게 실패하도록 함
+        Duration connectTimeout = isTestProfile ? Duration.ofSeconds(5) : Duration.ofSeconds(30);
+        Duration commandTimeout = isTestProfile ? Duration.ofSeconds(3) : Duration.ofSeconds(15);
+        Duration shutdownTimeout = isTestProfile ? Duration.ofSeconds(2) : Duration.ofSeconds(5);
+        
+        SocketOptions socketOptions = SocketOptions.builder()
+                .connectTimeout(connectTimeout)  // 테스트: 5초, 운영: 30초
+                .build();
+
+        TimeoutOptions timeoutOptions = TimeoutOptions.builder()
+                .fixedTimeout(commandTimeout)  // 테스트: 3초, 운영: 15초
+                .build();
+
+        // 테스트 환경에서는 자동 재연결 비활성화 (연결 실패 시 빠르게 실패하고 예외 처리로 폴백)
+        // 운영 환경에서는 자동 재연결 활성화 (장애 복구를 위해 필요)
+        ClientOptions clientOptions = ClientOptions.builder()
+                .socketOptions(socketOptions)
+                .timeoutOptions(timeoutOptions)
+                .autoReconnect(!isTestProfile)  // 테스트: false, 운영: true
+                .build();
+        
+        LettuceClientConfiguration clientConfig = LettuceClientConfiguration.builder()
+                .clientOptions(clientOptions)
+                .commandTimeout(commandTimeout)  // 테스트: 3초, 운영: 15초
+                .shutdownTimeout(shutdownTimeout)  // 테스트: 2초, 운영: 5초
+                .build();
+
+        LettuceConnectionFactory factory = new LettuceConnectionFactory(config, clientConfig);
+        factory.afterPropertiesSet();
+        return factory;
     }
 
     @Bean

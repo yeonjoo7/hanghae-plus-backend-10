@@ -11,6 +11,7 @@ import com.hanghae.ecommerce.domain.coupon.repository.UserCouponRepository;
 import com.hanghae.ecommerce.domain.product.Quantity;
 import com.hanghae.ecommerce.domain.user.User;
 import com.hanghae.ecommerce.domain.user.repository.UserRepository;
+import com.hanghae.ecommerce.infrastructure.coupon.CouponQueueService;
 import com.hanghae.ecommerce.infrastructure.lock.LockManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,6 +51,9 @@ class CouponServiceTest {
     @Mock
     private PlatformTransactionManager transactionManager;
 
+    @Mock
+    private CouponQueueService couponQueueService;
+
     private CouponService couponService;
 
     private User testUser;
@@ -63,7 +67,8 @@ class CouponServiceTest {
                 userCouponRepository,
                 userRepository,
                 lockManager,
-                transactionManager);
+                transactionManager,
+                couponQueueService);
 
         testUser = User.create("test@example.com", "테스트", "010-1234-5678");
         testCoupon = Coupon.create(

@@ -3,10 +3,20 @@ package com.hanghae.ecommerce.infrastructure.scheduler;
 import com.hanghae.ecommerce.infrastructure.external.DataTransmissionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+/**
+ * 데이터 전송 스케줄러
+ * 
+ * ## 테스트 환경
+ * - 테스트 프로파일에서는 자동으로 비활성화됨
+ */
 @Component
+@Profile("!test")
+@ConditionalOnProperty(name = "app.scheduler.data-transmission.enabled", havingValue = "true", matchIfMissing = false)
 public class DataTransmissionScheduler {
     
     private static final Logger log = LoggerFactory.getLogger(DataTransmissionScheduler.class);

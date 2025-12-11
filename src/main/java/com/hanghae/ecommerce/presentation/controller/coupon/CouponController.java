@@ -1,7 +1,6 @@
 package com.hanghae.ecommerce.presentation.controller.coupon;
 
 import com.hanghae.ecommerce.application.coupon.CouponService;
-import com.hanghae.ecommerce.presentation.dto.UserCouponDto;
 import com.hanghae.ecommerce.common.ApiResponse;
 import com.hanghae.ecommerce.presentation.dto.CouponUsageHistoryResponse;
 import com.hanghae.ecommerce.domain.coupon.UserCoupon;
@@ -9,6 +8,7 @@ import com.hanghae.ecommerce.domain.coupon.UserCouponInfo;
 import com.hanghae.ecommerce.domain.coupon.UserCouponState;
 import com.hanghae.ecommerce.presentation.dto.IssueCouponResponse;
 import com.hanghae.ecommerce.presentation.dto.MyCouponResponse;
+import com.hanghae.ecommerce.presentation.dto.RequestCouponIssueResponse;
 import com.hanghae.ecommerce.presentation.exception.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -31,7 +31,45 @@ public class CouponController {
     private static final Long CURRENT_USER_ID = 1L;
 
     /**
-     * 쿠폰 발급
+     * 쿠폰 발급 요청 (Redis 기반 비동기)
+     * POST /coupons/{couponId}/request
+     * 
+     * Redis 대기열에 추가하고 즉시 응답합니다.
+     * 실제 발급은 스케줄러가 비동기로 처리합니다.
+     */
+    @PostMapping("/{couponId}/request")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public ApiResponse<RequestCouponIssueResponse> requestCouponIssue(@PathVariable Long couponId) {
+        try {
+            long queueRank = couponService.requestCouponIssue(couponId, CURRENT_USER_ID);
+            long queueSize = couponService.getQueueSize(couponId);
+
+            RequestCouponIssueResponse response = new RequestCouponIssueResponse(
+                    couponId,
+                    queueRank,
+                    queueSize);
+
+            return ApiResponse.success(response, "쿠폰 발급 요청이 대기열에 추가되었습니다");
+
+        } catch (CouponNotFoundException e) {
+            throw e;
+        } catch (IllegalArgumentException e) {
+            if (e.getMessage().contains("사용자를 찾을 수 없습니다")) {
+                throw new IllegalArgumentException("사용자를 찾을 수 없습니다");
+            }
+            throw e;
+        } catch (IllegalStateException e) {
+            if (e.getMessage().contains("쿠폰을 발급할 수 없습니다")) {
+                throw new IllegalStateException("쿠폰을 발급할 수 없습니다");
+            }
+            throw e;
+        } catch (CouponAlreadyIssuedException e) {
+            throw e;
+        }
+    }
+
+    /**
+     * 쿠폰 발급 (기존 동기 방식 - 하위 호환성 유지)
      * POST /coupons/{couponId}/issue
      */
     @PostMapping("/{couponId}/issue")
@@ -101,6 +139,23 @@ public class CouponController {
                 .count();
 
         MyCouponResponse response = new MyCouponResponse(coupons, totalCount, availableCount);
+        return ApiResponse.success(response);
+    }
+
+    /**
+     * 대기열 순위 조회
+     * GET /coupons/{couponId}/queue-rank
+     */
+    @GetMapping("/{couponId}/queue-rank")
+    public ApiResponse<RequestCouponIssueResponse> getQueueRank(@PathVariable Long couponId) {
+        long queueRank = couponService.getQueueRank(couponId, CURRENT_USER_ID);
+        long queueSize = couponService.getQueueSize(couponId);
+
+        RequestCouponIssueResponse response = new RequestCouponIssueResponse(
+                couponId,
+                queueRank > 0 ? queueRank : null,
+                queueSize);
+
         return ApiResponse.success(response);
     }
 
