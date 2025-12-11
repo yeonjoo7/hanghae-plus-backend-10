@@ -108,10 +108,9 @@ public class PaymentService {
 
     /**
      * 결제 처리 (분산락 적용)
-     * 
+     *
      * 동시 결제 요청에 대한 동시성 제어:
-     * - payment:{orderId} 락: 동일 주문에 대한 중복 결제 방지
-     * - balance:{userId} 락: 사용자 잔액 동시 차감 방지
+     * - payment:{userId} 락: 동일 사용자의 결제를 직렬화하여 잔액 정합성 보장 및 중복 결제 방지
      */
     public Payment processPayment(String orderId, String userId, PaymentMethod paymentMethod) {
         // 1. 주문 조회 (락 획득 전 기본 검증)
@@ -128,18 +127,14 @@ public class PaymentService {
             throw new PaymentAlreadyCompletedException();
         }
 
-        // 2. 주문별 결제 락 획득 - 동일 주문에 대한 중복 결제 방지
-        String paymentLockKey = "payment:" + orderId;
+        // 2. 사용자별 결제 락 획득 - 동일 사용자의 결제를 직렬화
+        String lockKey = "payment:" + userId;
 
-        return lockManager.executeWithLock(paymentLockKey, () -> {
-            // 3. 사용자별 잔액 락 획득 - 동시 잔액 차감 방지
-            String balanceLockKey = "balance:" + userId;
+        return lockManager.executeWithLock(lockKey, () -> {
+            TransactionTemplate template = new TransactionTemplate(transactionManager);
+            template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
-            return lockManager.executeWithLock(balanceLockKey, () -> {
-                TransactionTemplate template = new TransactionTemplate(transactionManager);
-                template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-
-                return template.execute(status -> {
+            return template.execute(status -> {
                     // 4. 주문 상태 재확인 (락 획득 후 - Race Condition 방지)
                     Order lockedOrder = orderRepository.findById(Long.valueOf(orderId))
                             .orElseThrow(() -> new OrderNotFoundException(Long.valueOf(orderId)));
@@ -229,7 +224,6 @@ public class PaymentService {
 
                     return payment;
                 });
-            });
         });
     }
 
