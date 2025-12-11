@@ -12,7 +12,6 @@ import org.springframework.web.client.RestTemplate;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 @Service
 public class DataTransmissionService {
@@ -81,10 +80,9 @@ public class DataTransmissionService {
             jdbcTemplate.update(
                     """
                             INSERT INTO data_transmissions
-                            (id, aggregate_type, aggregate_id, event_type, payload, status, attempts)
-                            VALUES (?, ?, ?, ?, ?, 'PENDING', 0)
+                            (aggregate_type, aggregate_id, event_type, payload, state, attempts)
+                            VALUES (?, ?, ?, ?, 'PENDING', 0)
                             """,
-                    UUID.randomUUID().toString(),
                     aggregateType,
                     aggregateId,
                     eventType,
@@ -144,14 +142,14 @@ public class DataTransmissionService {
     /**
      * 특정 이벤트 타입의 전송 내역 조회
      */
-    public List<Map<String, Object>> getTransmissionHistory(String eventType, String status) {
+    public List<Map<String, Object>> getTransmissionHistory(String eventType, String state) {
         String sql = """
                 SELECT * FROM data_transmissions
-                WHERE event_type = ? AND status = ?
+                WHERE event_type = ? AND state = ?
                 ORDER BY created_at DESC
                 LIMIT 100
                 """;
 
-        return jdbcTemplate.queryForList(sql, eventType, status);
+        return jdbcTemplate.queryForList(sql, eventType, state);
     }
 }
