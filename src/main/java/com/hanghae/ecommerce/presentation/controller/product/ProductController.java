@@ -100,11 +100,21 @@ public class ProductController {
 
     /**
      * 인기 상품 조회
-     * GET /products/popular
+     * GET /products/popular?period={period}
+     *
+     * @param period 조회 기간 (daily: 1일, weekly: 7일, 기본값: weekly)
      */
     @GetMapping("/popular")
-    public ApiResponse<PopularProductResponse> getPopularProducts() {
-        List<PopularProduct> popularProducts = productService.getPopularProducts();
+    public ApiResponse<PopularProductResponse> getPopularProducts(
+            @RequestParam(value = "period", defaultValue = "weekly") String period) {
+        int days = switch (period.toLowerCase()) {
+            case "daily" -> 1;
+            case "weekly" -> 7;
+            case "monthly" -> 30;
+            default -> 7;
+        };
+
+        List<PopularProduct> popularProducts = productService.getPopularProducts(days, 10);
 
         List<PopularProductResponse.PopularProductItem> products = popularProducts.stream()
                 .map(popularProduct -> {

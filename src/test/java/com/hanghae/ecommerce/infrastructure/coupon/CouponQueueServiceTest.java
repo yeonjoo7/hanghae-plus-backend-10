@@ -5,7 +5,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate;
 
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -18,17 +17,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 쿠폰 대기열 서비스 테스트
- * 
- * Redis Sorted Set 기반 대기열 관리 기능을 검증합니다.
+ *
+ * Redis List 기반 대기열 관리 기능을 검증합니다.
+ * - RPUSH로 대기열에 추가 (선착순 보장)
+ * - LPOP으로 대기열에서 꺼냄 (FIFO)
  */
 @DisplayName("CouponQueueService 테스트")
 class CouponQueueServiceTest extends BaseIntegrationTest {
 
   @Autowired
   private CouponQueueService couponQueueService;
-
-  @Autowired
-  private RedisTemplate<String, Object> redisTemplate;
 
   private Long testCouponId;
 
@@ -119,84 +117,49 @@ class CouponQueueServiceTest extends BaseIntegrationTest {
   }
 
   @Test
-  @DisplayName("발급 완료 처리")
+  @DisplayName("발급 완료 처리 - 스케줄러 워크플로우 (dequeue → markAsIssued)")
   void testMarkAsIssued() {
     // given
     Long userId = 100L;
     couponQueueService.enqueue(testCouponId, userId);
     assertThat(couponQueueService.getQueueSize(testCouponId)).isEqualTo(1);
 
-    // when
-    couponQueueService.markAsIssued(testCouponId, userId);
+    // when - 스케줄러 워크플로우: dequeue로 빼고, markAsIssued로 발급 완료 표시
+    String dequeuedUserId = couponQueueService.dequeue(testCouponId);
+    couponQueueService.markAsIssued(testCouponId, Long.valueOf(dequeuedUserId));
 
     // then
+    assertThat(dequeuedUserId).isEqualTo(userId.toString());
     assertThat(couponQueueService.isAlreadyIssued(testCouponId, userId)).isTrue();
-    assertThat(couponQueueService.getQueueSize(testCouponId)).isEqualTo(0); // 대기열에서 제거됨
+    assertThat(couponQueueService.getQueueSize(testCouponId)).isEqualTo(0); // dequeue로 제거됨
   }
 
   @Test
-  @DisplayName("수량 관리 - 초기화 및 차감")
-  void testQuantityManagement() {
+  @DisplayName("대기열에서 사용자 꺼내기 (FIFO)")
+  void testDequeue() {
     // given
-    int totalQuantity = 100;
+    Long userId1 = 100L;
+    Long userId2 = 200L;
+    Long userId3 = 300L;
+    couponQueueService.enqueue(testCouponId, userId1);
+    couponQueueService.enqueue(testCouponId, userId2);
+    couponQueueService.enqueue(testCouponId, userId3);
 
+    // when & then - FIFO 순서로 꺼내지는지 확인
+    assertThat(couponQueueService.dequeue(testCouponId)).isEqualTo(userId1.toString());
+    assertThat(couponQueueService.dequeue(testCouponId)).isEqualTo(userId2.toString());
+    assertThat(couponQueueService.dequeue(testCouponId)).isEqualTo(userId3.toString());
+    assertThat(couponQueueService.dequeue(testCouponId)).isNull(); // 빈 큐
+  }
+
+  @Test
+  @DisplayName("빈 대기열에서 dequeue 시 null 반환")
+  void testDequeueFromEmptyQueue() {
     // when
-    boolean initialized = couponQueueService.initializeQuantity(testCouponId, totalQuantity);
-    java.util.Optional<Integer> remaining1Opt = couponQueueService.getRemainingQuantity(testCouponId);
+    String result = couponQueueService.dequeue(testCouponId);
 
     // then
-    assertThat(initialized).isTrue(); // 초기화 성공
-    assertThat(remaining1Opt).isPresent();
-    assertThat(remaining1Opt.get()).isEqualTo(100);
-
-    // when - 수량 차감
-    int remaining2 = couponQueueService.decrementQuantity(testCouponId);
-
-    // then
-    assertThat(remaining2).isEqualTo(99);
-    java.util.Optional<Integer> remaining3Opt = couponQueueService.getRemainingQuantity(testCouponId);
-    assertThat(remaining3Opt).isPresent();
-    assertThat(remaining3Opt.get()).isEqualTo(99);
-  }
-
-  @Test
-  @DisplayName("수량 초기화 동시성 테스트 - SETNX로 원자적 초기화 보장")
-  void testConcurrentQuantityInitialization() throws InterruptedException {
-    // given
-    int totalQuantity = 100;
-    int concurrentThreads = 10;
-    ExecutorService executor = Executors.newFixedThreadPool(concurrentThreads);
-    CountDownLatch startLatch = new CountDownLatch(1);
-    CountDownLatch endLatch = new CountDownLatch(concurrentThreads);
-    AtomicInteger successCount = new AtomicInteger(0);
-
-    // when - 여러 스레드가 동시에 초기화 시도
-    for (int i = 0; i < concurrentThreads; i++) {
-      executor.submit(() -> {
-        try {
-          startLatch.await();
-          boolean initialized = couponQueueService.initializeQuantity(testCouponId, totalQuantity);
-          if (initialized) {
-            successCount.incrementAndGet();
-          }
-        } catch (Exception e) {
-          System.err.println("초기화 실패: " + e.getMessage());
-        } finally {
-          endLatch.countDown();
-        }
-      });
-    }
-
-    startLatch.countDown();
-    boolean completed = endLatch.await(30, TimeUnit.SECONDS);
-    executor.shutdown();
-
-    // then - SETNX로 인해 하나의 스레드만 초기화 성공해야 함
-    assertThat(completed).isTrue();
-    assertThat(successCount.get()).isEqualTo(1); // 하나만 성공
-    java.util.Optional<Integer> remainingOpt = couponQueueService.getRemainingQuantity(testCouponId);
-    assertThat(remainingOpt).isPresent();
-    assertThat(remainingOpt.get()).isEqualTo(totalQuantity);
+    assertThat(result).isNull();
   }
 
   @Test
