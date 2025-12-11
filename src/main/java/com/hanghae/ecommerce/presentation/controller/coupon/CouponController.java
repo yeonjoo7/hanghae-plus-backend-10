@@ -1,7 +1,6 @@
 package com.hanghae.ecommerce.presentation.controller.coupon;
 
 import com.hanghae.ecommerce.application.coupon.CouponService;
-import com.hanghae.ecommerce.presentation.dto.UserCouponDto;
 import com.hanghae.ecommerce.common.ApiResponse;
 import com.hanghae.ecommerce.presentation.dto.CouponUsageHistoryResponse;
 import com.hanghae.ecommerce.domain.coupon.UserCoupon;
@@ -52,10 +51,10 @@ public class CouponController {
 
             return ApiResponse.success(response, "쿠폰 발급 요청이 대기열에 추가되었습니다");
 
+        } catch (CouponNotFoundException e) {
+            throw e;
         } catch (IllegalArgumentException e) {
-            if (e.getMessage().contains("쿠폰을 찾을 수 없습니다")) {
-                throw new CouponNotFoundException(couponId);
-            } else if (e.getMessage().contains("사용자를 찾을 수 없습니다")) {
+            if (e.getMessage().contains("사용자를 찾을 수 없습니다")) {
                 throw new IllegalArgumentException("사용자를 찾을 수 없습니다");
             }
             throw e;
