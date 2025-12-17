@@ -202,10 +202,14 @@ public class CouponService {
 
     /**
      * Redis 기반 비동기 쿠폰 발급 요청
-     * 
+     *
      * 사용자 요청을 Redis 대기열에 추가하고 즉시 응답합니다.
      * 실제 발급은 스케줄러가 비동기로 처리합니다.
-     * 
+     *
+     * ## 변경 사항 (리뷰 반영)
+     * - Redis quantity 관리 제거: DB를 단일 진실 공급원(Single Source of Truth)으로 사용
+     * - 복잡도 감소: Redis ↔ DB 간 수량 동기화 로직 제거
+     *
      * @param couponId 쿠폰 ID
      * @param userId   사용자 ID
      * @return 대기열 순위 (1부터 시작, -1이면 이미 발급됨 또는 대기열에 이미 존재)
@@ -223,7 +227,7 @@ public class CouponService {
         Coupon coupon = couponRepository.findById(couponId)
                 .orElseThrow(() -> new CouponNotFoundException(couponId));
 
-        // 쿠폰 상태 및 기간만 확인 (수량은 Redis에서 관리하므로 완화)
+        // 쿠폰 상태 및 기간 확인
         if (!coupon.getState().isIssuable()) {
             throw new IllegalStateException("쿠폰을 발급할 수 없습니다. 상태: " + coupon.getState());
         }
@@ -232,27 +236,15 @@ public class CouponService {
         }
 
         // 3. Redis 대기열에 추가 (쿠폰 종료일 전달하여 TTL 설정)
-        long rank = couponQueueService.enqueue(couponId, userId, coupon.getEndDate());
+        // 수량 확인은 스케줄러에서 DB를 통해 처리
+        long position = couponQueueService.enqueue(couponId, userId, coupon.getEndDate());
 
         // enqueue()는 이미 발급된 경우에만 -1을 반환하므로, -1이면 이미 발급된 경우
-        if (rank == -1) {
+        if (position == -1) {
             throw new CouponAlreadyIssuedException();
         }
 
-        // 4. 쿠폰 수량 초기화 (Redis에 없을 경우, 쿠폰 종료일 전달하여 TTL 설정)
-        // SETNX를 사용하여 원자적으로 초기화하여 동시성 이슈 방지
-        java.util.Optional<Integer> remainingQuantityOpt = couponQueueService.getRemainingQuantity(couponId);
-        if (remainingQuantityOpt.isEmpty()) {
-            int totalQuantity = coupon.getTotalQuantity().getValue();
-            int issuedQuantity = coupon.getIssuedQuantity().getValue();
-            int remainingQuantity = totalQuantity - issuedQuantity;
-            if (remainingQuantity > 0) {
-                // SETNX를 사용하여 원자적으로 초기화 (이미 다른 스레드가 초기화했으면 false 반환)
-                couponQueueService.initializeQuantity(couponId, remainingQuantity, coupon.getEndDate());
-            }
-        }
-
-        return rank;
+        return position;
     }
 
     /**
