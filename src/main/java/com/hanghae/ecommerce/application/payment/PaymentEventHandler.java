@@ -10,7 +10,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -30,7 +29,7 @@ public class PaymentEventHandler {
     private final DataTransmissionService dataTransmissionService;
 
     public PaymentEventHandler(ProductRankingService productRankingService,
-                               DataTransmissionService dataTransmissionService) {
+            DataTransmissionService dataTransmissionService) {
         this.productRankingService = productRankingService;
         this.dataTransmissionService = dataTransmissionService;
     }
@@ -75,7 +74,7 @@ public class PaymentEventHandler {
             orderData.put("discountAmount", 0);
             orderData.put("finalAmount", event.totalAmount());
             orderData.put("paymentMethod", event.paymentMethod().name());
-            orderData.put("timestamp", LocalDateTime.now());
+            orderData.put("timestamp", event.paidAt());
 
             dataTransmissionService.send(orderData);
         } catch (Exception e) {

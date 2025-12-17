@@ -88,8 +88,7 @@ public class PaymentService {
                 order,
                 List.of(),
                 true,
-                null
-        );
+                null);
     }
 
     /**
@@ -165,8 +164,7 @@ public class PaymentService {
                         Long.valueOf(orderId),
                         paymentMethod,
                         lockedOrder.getTotalAmount(),
-                        null
-                );
+                        null);
                 payment.complete();
                 paymentRepository.save(payment);
 
@@ -195,8 +193,8 @@ public class PaymentService {
                         lockedOrder.getOrderNumber().getValue(),
                         lockedOrder.getTotalAmount().getValue(),
                         paymentMethod,
-                        productOrderCounts
-                );
+                        productOrderCounts,
+                        payment.getPaidAt());
                 eventPublisher.publishEvent(event);
 
                 return payment;
