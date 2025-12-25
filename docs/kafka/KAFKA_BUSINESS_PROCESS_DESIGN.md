@@ -183,7 +183,7 @@
 
 ```
 ┌───────┐  ┌──────────────────┐  ┌────────────────┐  ┌───────────────┐
-│ Kafka │  │PaymentConsumer   │  │DataTransmission│  │   DLQ Topic   │
+│ Kafka │  │PaymentConsumer   │  │DataTransmission│  │   DLT Topic   │
 └───┬───┘  └────────┬─────────┘  └───────┬────────┘  └───────┬───────┘
     │               │                    │                   │
     │ ConsumerRecord│                    │                   │
@@ -209,7 +209,7 @@
     │               │ DefaultErrorHandler                   │
     │               │ (3회 재시도 후 최종 실패)              │
     │               │                    │                   │
-    │               │ DLQ로 메시지 전송  │                   │
+    │               │ DLT로 메시지 전송  │                   │
     │               │──────────────────────────────────────▶│
     │               │                    │                   │
     │ Offset Commit │                    │                   │
@@ -436,13 +436,13 @@ spring:
 
 시나리오 2: 처리 실패 (3회 재시도 후)
 ┌─────────────┐
-│ 메시지 처리 │──▶ 3회 재시도 실패 ──▶ DLQ 전송 ──▶ 수동 처리
+│ 메시지 처리 │──▶ 3회 재시도 실패 ──▶ DLT 전송 ──▶ 수동 처리
 └─────────────┘
 
 대응:
 • DefaultErrorHandler가 3회 재시도
-• 최종 실패 시 DLQ(Dead Letter Queue)로 전송
-• 운영자가 DLQ 모니터링 후 수동 처리
+• 최종 실패 시 DLT(Dead Letter Topic)로 전송
+• 운영자가 DLT 모니터링 후 수동 처리
 ```
 
 ### 6.3 메시지 처리 멱등성
@@ -493,7 +493,7 @@ public void consume(PaymentCompletedMessage message, Acknowledgment ack) {
 | Consumer Lag | 처리 대기 메시지 수 | > 1000 경고 |
 | Message Rate | 초당 메시지 처리량 | 비정상 급증/급감 시 경고 |
 | Error Rate | 처리 실패율 | > 1% 경고 |
-| DLQ Message Count | DLQ 메시지 수 | > 0 즉시 확인 |
+| DLT Message Count | DLT 메시지 수 | > 0 즉시 확인 |
 
 ### 7.3 운영 명령어
 
@@ -510,7 +510,7 @@ kafka-consumer-groups --describe --group data-platform-group --bootstrap-server 
 # 메시지 확인 (최근 10개)
 kafka-console-consumer --topic payment-completed --bootstrap-server localhost:9092 --from-beginning --max-messages 10
 
-# DLQ 메시지 확인
+# DLT 메시지 확인
 kafka-console-consumer --topic payment-completed.DLT --bootstrap-server localhost:9092 --from-beginning
 ```
 
@@ -518,7 +518,7 @@ kafka-console-consumer --topic payment-completed.DLT --bootstrap-server localhos
 
 - [ ] Kafka Broker 상태 확인
 - [ ] Consumer Group Lag 모니터링
-- [ ] DLQ 메시지 확인 및 처리
+- [ ] DLT 메시지 확인 및 처리
 - [ ] 디스크 사용량 확인
 - [ ] 로그 보존 기간 관리
 
