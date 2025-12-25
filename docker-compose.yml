@@ -26,6 +26,19 @@ services:
       timeout: 20s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: ecommerce-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   app:
     build:
       context: .
@@ -40,18 +53,22 @@ services:
       DB_PASSWORD: ecommerce123
       DATA_PLATFORM_URL: http://mock-platform:4000
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       mysql:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - ecommerce-network
 
   mock-platform:
     build:
-      context: .
-      dockerfile: Dockerfile.mock
+      context: ./mock-server
+      dockerfile: Dockerfile
     container_name: mock-data-platform
     ports:
       - "4000:4000"
@@ -59,8 +76,10 @@ services:
       - ecommerce-network
 
   # Kafka Infrastructure (KRaft Mode - No Zookeeper)
+  # Note: apache/kafka:3.7.0 has SIGILL issue on Apple Silicon (ARM64)
+  # Using confluentinc/cp-kafka:7.6.0 instead which works on ARM64
   kafka:
-    image: apache/kafka:3.7.0
+    image: confluentinc/cp-kafka:7.6.0
     container_name: ecommerce-kafka
     ports:
       - "9092:9092"
@@ -82,21 +101,19 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      # 개발 환경에서는 true로 설정하여 편리하게 사용
-      # 운영 환경에서는 false로 설정하여 토픽을 명시적으로 관리 권장
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_LOG_DIRS: /var/lib/kafka/data
 
-      # KRaft 클러스터 ID (고정값 사용)
+      # KRaft 클러스터 ID
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
     networks:
       - ecommerce-network
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 10s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 60s
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest

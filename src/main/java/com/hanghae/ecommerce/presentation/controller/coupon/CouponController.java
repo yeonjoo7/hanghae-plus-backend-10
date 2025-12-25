@@ -27,21 +27,20 @@ public class CouponController {
 
     private final CouponService couponService;
 
-    // TODO: 현재는 임시로 userId를 1L로 고정. 실제로는 인증된 사용자 정보에서 가져와야 함
-    private static final Long CURRENT_USER_ID = 1L;
-
     /**
      * 쿠폰 발급 요청 (Redis 기반 비동기)
      * POST /coupons/{couponId}/request
-     * 
+     *
      * Redis 대기열에 추가하고 즉시 응답합니다.
      * 실제 발급은 스케줄러가 비동기로 처리합니다.
      */
     @PostMapping("/{couponId}/request")
     @ResponseStatus(HttpStatus.ACCEPTED)
-    public ApiResponse<RequestCouponIssueResponse> requestCouponIssue(@PathVariable Long couponId) {
+    public ApiResponse<RequestCouponIssueResponse> requestCouponIssue(
+            @com.hanghae.ecommerce.common.annotation.AuthenticatedUser Long userId,
+            @PathVariable Long couponId) {
         try {
-            long queueRank = couponService.requestCouponIssue(couponId, CURRENT_USER_ID);
+            long queueRank = couponService.requestCouponIssue(couponId, userId);
             long queueSize = couponService.getQueueSize(couponId);
 
             RequestCouponIssueResponse response = new RequestCouponIssueResponse(
@@ -74,10 +73,12 @@ public class CouponController {
      */
     @PostMapping("/{couponId}/issue")
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<IssueCouponResponse> issueCoupon(@PathVariable Long couponId) {
+    public ApiResponse<IssueCouponResponse> issueCoupon(
+            @com.hanghae.ecommerce.common.annotation.AuthenticatedUser Long userId,
+            @PathVariable Long couponId) {
         try {
-            UserCoupon userCoupon = couponService.issueCoupon(CURRENT_USER_ID, couponId);
-            UserCouponInfo couponInfo = couponService.getUserCoupon(CURRENT_USER_ID, userCoupon.getId());
+            UserCoupon userCoupon = couponService.issueCoupon(userId, couponId);
+            UserCouponInfo couponInfo = couponService.getUserCoupon(userId, userCoupon.getId());
 
             IssueCouponResponse response = new IssueCouponResponse(
                     couponInfo.getUserCouponId(),
@@ -115,18 +116,19 @@ public class CouponController {
      */
     @GetMapping("/my")
     public ApiResponse<MyCouponResponse> getMyCoupons(
+            @com.hanghae.ecommerce.common.annotation.AuthenticatedUser Long userId,
             @RequestParam(required = false) String status) {
 
         List<UserCouponInfo> couponInfos;
         if (status != null) {
             UserCouponState couponStatus = parseUserCouponStatus(status);
             // 상태별 필터링 구현 필요 - 현재는 전체 조회 후 필터링
-            couponInfos = couponService.getUserCoupons(CURRENT_USER_ID)
+            couponInfos = couponService.getUserCoupons(userId)
                     .stream()
                     .filter(info -> info.getState() == couponStatus)
                     .collect(Collectors.toList());
         } else {
-            couponInfos = couponService.getUserCoupons(CURRENT_USER_ID);
+            couponInfos = couponService.getUserCoupons(userId);
         }
 
         List<MyCouponResponse.CouponResponse> coupons = couponInfos.stream()
@@ -147,8 +149,10 @@ public class CouponController {
      * GET /coupons/{couponId}/queue-rank
      */
     @GetMapping("/{couponId}/queue-rank")
-    public ApiResponse<RequestCouponIssueResponse> getQueueRank(@PathVariable Long couponId) {
-        long queueRank = couponService.getQueueRank(couponId, CURRENT_USER_ID);
+    public ApiResponse<RequestCouponIssueResponse> getQueueRank(
+            @com.hanghae.ecommerce.common.annotation.AuthenticatedUser Long userId,
+            @PathVariable Long couponId) {
+        long queueRank = couponService.getQueueRank(couponId, userId);
         long queueSize = couponService.getQueueSize(couponId);
 
         RequestCouponIssueResponse response = new RequestCouponIssueResponse(
@@ -165,6 +169,7 @@ public class CouponController {
      */
     @GetMapping("/usage-history")
     public ApiResponse<CouponUsageHistoryResponse> getCouponUsageHistory(
+            @com.hanghae.ecommerce.common.annotation.AuthenticatedUser Long userId,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
 
@@ -172,7 +177,7 @@ public class CouponController {
         int pageNum = page != null ? page : 1;
         int pageSize = size != null ? size : 20;
 
-        List<UserCouponInfo> usageHistory = couponService.getCouponUsageHistory(CURRENT_USER_ID);
+        List<UserCouponInfo> usageHistory = couponService.getCouponUsageHistory(userId);
 
         // 페이징 처리 (간단한 구현)
         int totalItems = usageHistory.size();

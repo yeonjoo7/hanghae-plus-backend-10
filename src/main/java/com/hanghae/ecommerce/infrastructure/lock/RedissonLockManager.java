@@ -74,6 +74,8 @@ public class RedissonLockManager implements LockManager {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new RuntimeException("Interrupted while acquiring lock: " + lockKey, e);
+    } catch (RuntimeException e) {
+      throw e;  // RuntimeException(BusinessException 포함)은 그대로 다시 던짐
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
