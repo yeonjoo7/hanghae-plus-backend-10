@@ -355,23 +355,28 @@ public class CouponIssuanceConsumer {
                 request.getUserId()
             );
 
-            // 3. 성공 결과 발행
+            // 3. 처리 완료 마킹 (멱등성 보장)
+            markAsProcessed(request.getEventId());
+
+            // 4. 성공 결과 발행
             resultProducer.sendSuccessResult(request, userCoupon);
 
-            // 4. Redis 상태 업데이트
+            // 5. Redis 상태 업데이트
             updateRedisStatus(request, "SUCCESS", userCoupon.getId());
 
-            // 5. 오프셋 커밋
+            // 6. 오프셋 커밋
             ack.acknowledge();
 
         } catch (CouponAlreadyIssuedException e) {
             // 이미 발급된 경우 - 정상 처리로 간주
+            markAsProcessed(request.getEventId());
             resultProducer.sendFailResult(request, "ALREADY_ISSUED", e.getMessage());
             updateRedisStatus(request, "ALREADY_ISSUED", null);
             ack.acknowledge();
 
         } catch (IllegalStateException e) {
             // 쿠폰 소진 등 - 정상 처리로 간주
+            markAsProcessed(request.getEventId());
             resultProducer.sendFailResult(request, "EXHAUSTED", e.getMessage());
             updateRedisStatus(request, "EXHAUSTED", null);
             ack.acknowledge();
