@@ -30,6 +30,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.redisson:redisson-spring-boot-starter:3.37.0'
 
+    // Kafka
+    implementation 'org.springframework.kafka:spring-kafka'
+
     // MySQL
     runtimeOnly 'com.mysql:mysql-connector-j'
     
@@ -49,6 +52,8 @@ dependencies {
     testImplementation 'org.testcontainers:testcontainers:1.19.8'
     testImplementation 'org.testcontainers:mysql:1.19.8'
     testImplementation 'org.testcontainers:junit-jupiter:1.19.8'
+    testImplementation 'org.testcontainers:kafka:1.19.8'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
 }
 
 // Load .env file for tests

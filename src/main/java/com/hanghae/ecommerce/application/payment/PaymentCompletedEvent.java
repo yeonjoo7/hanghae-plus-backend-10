@@ -14,6 +14,8 @@ public record PaymentCompletedEvent(
                 String userId,
                 String orderNumber,
                 long totalAmount,
+                long discountAmount,
+                long finalAmount,
                 PaymentMethod paymentMethod,
                 Map<Long, Integer> productOrderCounts,
                 LocalDateTime paidAt) {

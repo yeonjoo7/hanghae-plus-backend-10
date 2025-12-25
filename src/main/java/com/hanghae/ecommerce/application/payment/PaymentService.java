@@ -191,6 +191,8 @@ public class PaymentService {
                         orderId,
                         userId,
                         lockedOrder.getOrderNumber().getValue(),
+                        lockedOrder.getAmount().getValue(),
+                        lockedOrder.getDiscountAmount().getValue(),
                         lockedOrder.getTotalAmount().getValue(),
                         paymentMethod,
                         productOrderCounts,
