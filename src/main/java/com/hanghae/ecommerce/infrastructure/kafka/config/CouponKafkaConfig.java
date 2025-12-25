@@ -13,6 +13,7 @@ import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
@@ -122,7 +123,7 @@ public class CouponKafkaConfig {
 
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, CouponIssuanceRequestMessage>
-            couponKafkaListenerContainerFactory() {
+            couponKafkaListenerContainerFactory(DefaultErrorHandler couponErrorHandler) {
 
         ConcurrentKafkaListenerContainerFactory<String, CouponIssuanceRequestMessage> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
@@ -136,7 +137,7 @@ public class CouponKafkaConfig {
         factory.setConcurrency(3);
 
         // 에러 핸들러 설정
-        factory.setCommonErrorHandler(couponErrorHandler());
+        factory.setCommonErrorHandler(couponErrorHandler);
 
         return factory;
     }
@@ -144,20 +145,17 @@ public class CouponKafkaConfig {
     /**
      * 쿠폰 발급용 에러 핸들러
      * - 1초 간격으로 3회 재시도
+     * - 재시도 실패 시 Dead Letter Topic(DLT)으로 메시지 전송
      */
     @Bean
-    public DefaultErrorHandler couponErrorHandler() {
+    public DefaultErrorHandler couponErrorHandler(KafkaTemplate<String, Object> couponKafkaTemplate) {
+        // 최종 실패 시 DLT로 메시지를 보내는 Recoverer
+        // DLT 토픽 이름은 자동으로 {original-topic}.DLT 로 생성됨
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(couponKafkaTemplate);
+
+        // 1초 간격으로 3회 재시도
         FixedBackOff backOff = new FixedBackOff(1000L, 3L);
 
-        DefaultErrorHandler errorHandler = new DefaultErrorHandler((record, exception) -> {
-            org.slf4j.LoggerFactory.getLogger(CouponKafkaConfig.class)
-                    .error("쿠폰 발급 메시지 처리 최종 실패 (DLQ 전송 필요): topic={}, partition={}, offset={}, error={}",
-                            record.topic(),
-                            record.partition(),
-                            record.offset(),
-                            exception.getMessage());
-        }, backOff);
-
-        return errorHandler;
+        return new DefaultErrorHandler(recoverer, backOff);
     }
 }

@@ -75,8 +75,8 @@ public class PaymentEventHandler {
                     event.userId(),
                     event.orderNumber(),
                     event.totalAmount(),
-                    0L, // discountAmount
-                    event.totalAmount(), // finalAmount
+                    event.discountAmount(),
+                    event.finalAmount(),
                     event.paymentMethod().name(),
                     event.productOrderCounts(),
                     event.paidAt()

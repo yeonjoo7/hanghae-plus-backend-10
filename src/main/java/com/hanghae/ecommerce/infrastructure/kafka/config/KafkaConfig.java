@@ -13,6 +13,7 @@ import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
@@ -115,7 +116,7 @@ public class KafkaConfig {
 
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, PaymentCompletedMessage>
-            kafkaListenerContainerFactory() {
+            kafkaListenerContainerFactory(DefaultErrorHandler errorHandler) {
 
         ConcurrentKafkaListenerContainerFactory<String, PaymentCompletedMessage> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
@@ -128,8 +129,8 @@ public class KafkaConfig {
         // 동시 처리 스레드 수 (파티션 수와 맞춤)
         factory.setConcurrency(3);
 
-        // 에러 핸들러 설정 (재시도 3회 후 DLQ로)
-        factory.setCommonErrorHandler(errorHandler());
+        // 에러 핸들러 설정 (재시도 3회 후 DLT로)
+        factory.setCommonErrorHandler(errorHandler);
 
         return factory;
     }
@@ -137,23 +138,17 @@ public class KafkaConfig {
     /**
      * 에러 핸들러
      * - 1초 간격으로 3회 재시도
-     * - 재시도 실패 시 로그 기록 (DLQ 전송은 별도 구현 필요)
+     * - 재시도 실패 시 Dead Letter Topic(DLT)으로 메시지 전송
      */
     @Bean
-    public DefaultErrorHandler errorHandler() {
+    public DefaultErrorHandler errorHandler(KafkaTemplate<String, PaymentCompletedMessage> kafkaTemplate) {
+        // 최종 실패 시 DLT로 메시지를 보내는 Recoverer
+        // DLT 토픽 이름은 자동으로 {original-topic}.DLT 로 생성됨
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
+
         // 1000ms 간격으로 3회 재시도
         FixedBackOff backOff = new FixedBackOff(1000L, 3L);
 
-        DefaultErrorHandler errorHandler = new DefaultErrorHandler((record, exception) -> {
-            // 최종 실패 시 로그 기록
-            org.slf4j.LoggerFactory.getLogger(KafkaConfig.class)
-                    .error("메시지 처리 최종 실패 (DLQ 전송 필요): topic={}, partition={}, offset={}, error={}",
-                            record.topic(),
-                            record.partition(),
-                            record.offset(),
-                            exception.getMessage());
-        }, backOff);
-
-        return errorHandler;
+        return new DefaultErrorHandler(recoverer, backOff);
     }
 }
