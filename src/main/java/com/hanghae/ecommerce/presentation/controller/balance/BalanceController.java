@@ -25,18 +25,17 @@ public class BalanceController {
 
     private final UserService userService;
 
-    // TODO: 현재는 임시로 userId를 1L로 고정. 실제로는 인증된 사용자 정보에서 가져와야 함
-    private static final Long CURRENT_USER_ID = 1L;
-
     /**
      * 잔액 충전
      * POST /balance/charge
      */
     @PostMapping("/charge")
-    public ApiResponse<ChargeBalanceResponse> chargeBalance(@Valid @RequestBody ChargeBalanceRequest request) {
+    public ApiResponse<ChargeBalanceResponse> chargeBalance(
+            @com.hanghae.ecommerce.common.annotation.AuthenticatedUser Long userId,
+            @Valid @RequestBody ChargeBalanceRequest request) {
         try {
             Point chargeAmount = Point.of(request.getAmount());
-            BalanceTransaction transaction = userService.chargePoint(CURRENT_USER_ID, chargeAmount);
+            BalanceTransaction transaction = userService.chargePoint(userId, chargeAmount);
 
             ChargeBalanceResponse.BalanceInfo balanceInfo = new ChargeBalanceResponse.BalanceInfo(
                     transaction.getBalanceBefore().getValue(),
@@ -66,9 +65,10 @@ public class BalanceController {
      * GET /balance
      */
     @GetMapping
-    public ApiResponse<BalanceResponse> getBalance() {
-        User user = userService.getUserById(CURRENT_USER_ID);
-        Point balance = userService.getUserBalance(CURRENT_USER_ID);
+    public ApiResponse<BalanceResponse> getBalance(
+            @com.hanghae.ecommerce.common.annotation.AuthenticatedUser Long userId) {
+        User user = userService.getUserById(userId);
+        Point balance = userService.getUserBalance(userId);
 
         BalanceResponse response = new BalanceResponse(
                 user.getId(),
@@ -84,6 +84,7 @@ public class BalanceController {
      */
     @GetMapping("/history")
     public ApiResponse<BalanceHistoryResponse> getBalanceHistory(
+            @com.hanghae.ecommerce.common.annotation.AuthenticatedUser Long userId,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
             @RequestParam(required = false) String type) {
@@ -92,7 +93,7 @@ public class BalanceController {
         int pageNum = page != null ? page : 1;
         int pageSize = size != null ? size : 20;
 
-        List<BalanceTransaction> allTransactions = userService.getTransactionHistory(CURRENT_USER_ID);
+        List<BalanceTransaction> allTransactions = userService.getTransactionHistory(userId);
 
         // 타입 필터링
         if (type != null) {
